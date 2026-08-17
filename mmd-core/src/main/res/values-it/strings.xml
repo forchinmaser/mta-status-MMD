@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+
+Copyright 2025 The Android Open Source Project
+
+Based on Material 3. Modified by Mudita Sp. z o.o.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+     http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
+-->
+
+<resources xmlns:xliff="urn:oasis:names:tc:xliff:document:1.2">
+    <!--DATA_PICKER-->
+    <string name="date_picker_input_date_not_match_pattern">La data non corrisponde al formato previsto: %1$s</string>
+    <string name="date_picker_input_date_out_of_range">La data è fuori dall\'intervallo di anni previsto: %1$s - %2$s</string>
+    <string name="date_picker_input_date_not_allowed">Data non consentita: %1$s</string>
+    <string name="date_picker_input_date">Data</string>
+    <string name="date_picker_select_date">Seleziona data</string>
+    <string name="date_picker_none">Nessuno</string>
+    <string name="date_picker_selected_date_mode">Data selezionata</string>
+    <string name="date_picker_entered_date_mode">Data inserita</string>
+    <string name="date_picker_current_selection">Selezione attuale: %1$s</string>
+    <string name="date_picker_entered_date">Data inserita: %1$s</string>
+    <string name="date_picker_today">Oggi</string>
+
+    <!--TIME_INPUT-->
+    <string name="time_picker_am">AM</string>
+    <string name="time_picker_hour">Ora</string>
+    <string name="time_picker_hour_24h_suffix">%1$d ore</string>
+    <string name="time_picker_hour_selection">Seleziona ora</string>
+    <string name="time_picker_hour_suffix">%1$d in punto</string>
+    <string name="time_picker_hour_text_field">per ora</string>
+    <string name="time_picker_minute">Minuto</string>
+    <string name="time_picker_minute_selection">Seleziona minuti</string>
+    <string name="time_picker_minute_suffix">%1$d minuti</string>
+    <string name="time_picker_minute_text_field">per minuti</string>
+    <string name="time_picker_period_toggle_description">Seleziona AM o PM</string>
+    <string name="time_picker_pm">PM</string>
+
+    <!--BOTTOM_SHEET-->
+    <string name="bottom_sheet_collapse_description">Comprimi foglio inferiore</string>
+    <string name="bottom_sheet_dismiss_description">Ignora foglio inferiore</string>
+    <string name="bottom_sheet_expand_description">Espandi foglio inferiore</string>
+
+    <string name="default_error_msg">"Input non valido"</string>
+</resources>
