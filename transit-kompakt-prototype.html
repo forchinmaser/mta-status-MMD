@@ -1,0 +1,1110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Transit — Kompakt Prototype</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<style>
+  /* Tokens taken from Mudita Mindful Design (github.com/mudita/MMD):
+     eInkColorScheme is pure black on pure white; disabled content is onSurface
+     at 38% alpha; eInkTypography is Lato Medium at the sizes below. */
+  :root{
+    --ink:#000000;
+    --paper:#ffffff;
+    --disabled:rgba(0,0,0,0.38);
+    --rule:#000000;
+
+    /* eInkTypography */
+    --headline-lg:28px;
+    --title-lg:24px;
+    --title-md:20px;
+    --title-sm:16px;
+    --body-lg:20px;
+    --body-md:18px;
+    --body-sm:15px;
+    --label-lg:18px;
+    --label-md:15px;
+    --label-sm:14px;
+
+    /* MMD metrics */
+    /* One button pitch for every full-width row, so a row on one screen sits
+       exactly where a row on the next screen sits and the E Ink panel never
+       redraws a boundary that did not move. */
+    --row-h:70px;
+    --row-gap:8px;
+    --chip-h:52px;
+    --chip-gap:8px;
+    --chip-w:58px;           /* 2-4 characters: M15, M125, B41 — 4 per row */
+    --chip-w-wide:124px;     /* long codes: Q44-SBS, BxM4C — 2 per row */
+    --line-h:22px;           /* alert text line grid */
+
+    --border-w:2px;          /* OutlinedButtonMMD / chip border */
+    --divider-w:3px;         /* DividerDefaultsMMD.Thickness */
+    --radius-btn:8px;        /* ButtonDefaultsMMD.buttonCornerRadius */
+    --radius-card:8px;       /* CardDefaultsMMD.shape */
+    --radius-chip:20px;      /* chip shape */
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:#dcdcdc;
+    font-family:"Lato",-apple-system,"Segoe UI",Helvetica,Arial,sans-serif;
+    font-weight:500;
+    color:var(--ink);
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:36px 16px 60px;
+    -webkit-font-smoothing:antialiased;
+  }
+  h1,h2,h3,p{margin:0;}
+  button{font-family:inherit;}
+  *:focus-visible{outline:2px dashed var(--ink); outline-offset:2px;}
+
+  /* ---------- device frame ---------- */
+  .device-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  .device{
+    width:360px;
+    height:600px;
+    background:var(--ink);
+    border-radius:26px;
+    padding:14px;
+    box-shadow:0 18px 40px rgba(0,0,0,0.28);
+  }
+  .screen{
+    width:100%;
+    height:100%;
+    background:var(--paper);
+    border-radius:8px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .caption{
+    max-width:360px;
+    text-align:center;
+    font-size:12px;
+    line-height:1.5;
+    color:#555;
+  }
+
+  /* ---------- top bar ---------- */
+  .topbar{
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    padding:10px;
+    border-bottom:var(--divider-w) solid var(--rule);
+    /* Fixed height on every screen — the bar and the divider under it are the
+       one thing that must never move between screens. */
+    height:67px;
+    box-sizing:border-box;
+  }
+  .topbar-home{width:100%;text-align:center;}
+  .wordmark-sm{
+    font-size:var(--title-md);
+    font-weight:700;
+  }
+  .topbar-title{
+    font-size:var(--title-md);
+    font-weight:500;
+    text-align:center;
+    flex:1;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    padding:0 6px;
+  }
+  .nav-btn{
+    background:none;
+    border:none;
+    width:44px;
+    height:44px;
+    font-size:20px;
+    line-height:1;
+    color:var(--ink);
+    cursor:pointer;
+    flex:0 0 auto;
+  }
+  .nav-btn:active{background:var(--ink);color:var(--paper);}
+
+  /* ---------- content area ---------- */
+  .content{
+    flex:1 1 auto;
+    min-height:0;
+    overflow:hidden;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  /* brief e-ink style refresh flash on full-screen navigation only */
+  .content.flash{animation:eink-flash .16s steps(2,end);}
+  @keyframes eink-flash{
+    0%{filter:invert(1);}
+    50%{filter:invert(1);}
+    100%{filter:invert(0);}
+  }
+
+  /* ---------- home screen ---------- */
+  /* The header occupies the first two rows of the SAME stack the mode buttons
+     sit in, so TRAIN and BUS land on exactly the pixels the third and fourth
+     borough rows occupy on the Bus screen — no boundary to redraw. */
+  .home-head{
+    height:calc(2 * var(--row-h) + var(--row-gap));
+    display:flex;
+    flex-direction:column;
+    justify-content:center;
+    align-items:center;
+    text-align:center;
+    gap:4px;
+    flex:0 0 auto;
+  }
+  .wordmark{font-size:var(--headline-lg);font-weight:700;}
+  .tagline{font-size:var(--body-sm);color:var(--ink);}
+
+  /* ---------- full-width rows (boroughs, home modes) ---------- */
+  .list-btn{
+    width:100%;
+    height:var(--row-h);
+    box-sizing:border-box;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-btn);
+    background:var(--paper);
+    padding:0 16px;
+    font-family:inherit;
+    font-size:var(--body-md);
+    font-weight:500;
+    color:var(--ink);
+    text-align:left;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+  }
+  .list-btn:active{background:var(--ink);color:var(--paper);}
+  .list-btn .row-label{font-size:var(--title-md);font-weight:700;}
+  .list-stack{display:flex;flex-direction:column;gap:var(--row-gap);flex:0 0 auto;}
+  /* Fixed single-line height: the label is the top row on every screen, so the
+     block below it always starts at the same y. */
+  .section-label{
+    font-size:var(--label-md);
+    font-weight:700;
+    color:var(--ink);
+    line-height:24px;
+    height:24px;
+    flex:0 0 auto;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+
+  /* ---------- chip grid (train lines / bus routes) ----------
+     Chips come in two fixed sizes only — 2-4 characters, and long/SBS codes —
+     laid out in explicit fixed-pitch rows, so a chip boundary is in the same
+     place on every page of every borough. */
+  .chip-grid-wrap{flex:1 1 auto;display:flex;min-height:120px;}
+  .chip-grid-viewport{flex:1;overflow:hidden;min-width:0;}
+  .chip-grid{display:flex;flex-direction:column;gap:var(--chip-gap);}
+  .chip-row{display:flex;gap:var(--chip-gap);height:var(--chip-h);flex:0 0 auto;}
+  .chip{
+    border:var(--border-w) solid var(--ink);
+    background:var(--paper);
+    box-sizing:border-box;
+    width:var(--chip-w);
+    height:var(--chip-h);
+    padding:0 4px;
+    font-family:inherit;
+    font-size:var(--label-md);
+    font-weight:700;
+    color:var(--ink);
+    cursor:pointer;
+    flex:0 0 auto;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .chip.circle{border-radius:50%;width:var(--chip-h);padding:0;}
+  .chip.rect{border-radius:var(--radius-btn);}
+  .chip.wide{width:var(--chip-w-wide);font-size:var(--label-sm);}
+  .chip:active{background:var(--ink);color:var(--paper);}
+  /* MMD disables by dropping content to 38% alpha, not by using a grey palette */
+  .chip.disabled{
+    border-color:var(--disabled);
+    color:var(--disabled);
+    cursor:default;
+  }
+
+  /* ---------- detail screen ---------- */
+  .badge-row{display:flex;align-items:center;gap:12px;flex:0 0 auto;}
+  /* ButtonMMD, filled */
+  .badge{
+    background:var(--ink);
+    color:var(--paper);
+    border:var(--border-w) solid var(--ink);
+    font-weight:700;
+    font-size:var(--label-md);
+    display:flex;align-items:center;justify-content:center;
+    flex:0 0 auto;
+  }
+  .badge.circle{width:var(--chip-h);height:var(--chip-h);border-radius:50%;}
+  .badge.rect{width:var(--chip-w);height:var(--chip-h);border-radius:var(--radius-btn);}
+  .badge.rect.wide{width:var(--chip-w-wide);font-size:var(--label-sm);}
+  .badge-info .name{font-size:var(--title-sm);font-weight:700;}
+  .badge-info .direction{font-size:var(--body-sm);color:var(--ink);margin-top:2px;}
+  .source-line{font-size:var(--label-sm);color:var(--ink);}
+  .status-line{font-size:var(--body-sm);color:var(--ink);}
+  .row-sub{display:block;font-size:var(--label-sm);font-weight:500;margin-top:2px;}
+  /* FilterChipMMD */
+  .dir-tabs{display:flex;gap:8px;flex:0 0 auto;}
+  .dir-tab{
+    flex:1 1 0;
+    min-width:0;
+    border:var(--border-w) solid var(--ink);
+    border-radius:var(--radius-chip);
+    background:var(--paper);
+    color:var(--ink);
+    padding:7px 12px;
+    font-family:inherit;
+    font-size:var(--label-sm);
+    font-weight:500;
+    cursor:pointer;
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .dir-tab.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+
+  /* notifications */
+  /* CardMMD */
+  .notif-wrap{
+    flex:0 0 auto;
+    border:var(--divider-w) solid var(--ink);
+    border-radius:var(--radius-card);
+    overflow:hidden;
+    background:var(--paper);
+  }
+  .notif-toggle{
+    width:100%;
+    border:none;
+    background:var(--paper);
+    padding:12px 14px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    cursor:pointer;
+    font-size:var(--body-md);
+    font-weight:700;
+    color:var(--ink);
+  }
+  .notif-toggle:active{background:var(--ink);color:var(--paper);}
+  .notif-wrap.has-alert .notif-toggle{background:var(--ink);color:var(--paper);}
+  .notif-wrap.has-alert .notif-body{border-top-color:var(--ink);}
+  /* Open, the card takes the whole screen and the line diagram is dropped:
+     alert text and diagram never compete for the same pixels. */
+  .notif-wrap.open{flex:1 1 auto;display:flex;flex-direction:column;min-height:0;}
+  .notif-body{
+    display:none;
+    border-top:1px solid var(--ink);
+    padding:10px 6px 10px 14px;
+  }
+  .notif-wrap.open .notif-body{display:flex;flex:1 1 auto;min-height:0;}
+  .alert-viewport{flex:1;overflow:hidden;min-width:0;}
+  .alert-inner{line-height:var(--line-h);}
+  .alert-item{padding:0;border-bottom:none;}
+  .alert-item + .alert-item{margin-top:var(--line-h);}
+  .alert-type{
+    font-size:var(--label-sm);font-weight:700;text-transform:uppercase;
+    color:var(--ink);line-height:var(--line-h);
+  }
+  .alert-text{font-size:var(--body-sm);line-height:var(--line-h);white-space:pre-line;}
+  .good-text{font-size:var(--body-sm);line-height:var(--line-h);color:var(--ink);}
+
+  /* stop line */
+  .legend{font-size:var(--label-sm);color:var(--ink);text-align:center;flex:0 0 auto;}
+  /* The stop list keeps at least three rows no matter what else is on screen,
+     and takes the whole remainder once the alert card is closed. */
+  .stopline-wrap{flex:1 1 auto;display:flex;min-height:132px;}
+  .notif-wrap.open ~ .stopline-wrap,
+  .notif-wrap.open ~ .legend{display:none;}
+  .stopline-viewport{flex:1;overflow:hidden;min-width:0;}
+  /* MMD LazyColumnMMD scrollbar: chevron, 8dp rounded track with 1dp border,
+     filled thumb, chevron. Chevrons page; long-press jumps to either end. */
+  .scrollrail{
+    flex:0 0 40px;
+    box-sizing:border-box;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:0 8px;
+  }
+  .scrollchev{
+    background:none;border:none;padding:16px 0;cursor:pointer;
+    width:24px;height:24px;box-sizing:content-box;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .scrollchev svg{width:24px;height:24px;display:block;}
+  .list-btn svg,.nav-btn svg{width:24px;height:24px;display:block;flex:0 0 auto;}
+  .scrolltrack{
+    flex:1;position:relative;width:8px;
+    border:1px solid var(--ink);
+    border-radius:4px;
+    background:var(--paper);
+  }
+  .scrollthumb{position:absolute;left:0;right:0;background:var(--ink);border-radius:4px;}
+  .stopline{position:relative;--row-h:44px;--label-size:var(--body-sm);}
+  .stopline::before{
+    content:'';
+    position:absolute;
+    left:14px;
+    top:calc(var(--row-h) / 2);
+    bottom:calc(var(--row-h) / 2);
+    width:2px;
+    background:var(--ink);
+  }
+  .stop-row{
+    position:relative;
+    display:flex;
+    align-items:center;
+    height:var(--row-h);
+  }
+  .dot-col{width:30px;flex:0 0 30px;display:flex;justify-content:center;position:relative;z-index:1;}
+  .dot{width:14px;height:14px;border-radius:50%;background:var(--ink);}
+  .dot.terminus{border-radius:3px;width:16px;height:16px;}
+  .dot.affected{background:var(--paper);border:3px solid var(--ink);width:16px;height:16px;}
+  .dot.affected.terminus{border-radius:3px;}
+  .stop-label{
+    margin-left:8px;
+    font-size:var(--label-size);
+    line-height:1.15;
+  }
+  .stop-label.affected{font-weight:700;}
+  .term-tag{
+    font-size:var(--label-sm);
+    color:var(--ink);
+    text-transform:uppercase;
+    margin-left:6px;
+  }
+</style>
+</head>
+<body>
+
+  <div class="device-wrap">
+    <div class="device">
+      <div class="screen">
+        <div class="topbar" id="topbar"></div>
+        <div class="content" id="content"></div>
+      </div>
+    </div>
+    <p class="caption" id="meta-caption">
+      Simulated E Ink screen (Mudita Kompakt), styled to Mudita Mindful Design. Everything on
+      screen is live: every subway line and every in-service bus route come from MTA open data
+      on data.ny.gov, and rider alerts from MTA's GTFS-realtime service-alert feeds, fetched
+      when you tap. Stop <em>order</em> is derived geographically here — the authoritative GTFS
+      stop_times feed is plain http with no CORS headers, so a browser cannot read it. The
+      Android app has no such limit and uses the real GTFS sequence.
+    </p>
+  </div>
+
+<script>
+/* ============================================================
+   LIVE DATA SOURCES
+
+   Everything on screen is fetched at runtime; nothing is bundled.
+
+   - Route + stop catalogue: MTA open data on data.ny.gov (Socrata, CORS-enabled)
+       subway stations   39hk-dx4f   every station, with the routes serving it
+       current bus stops ai5j-txmn   every in-effect bus route and its stops
+   - Live rider alerts: MTA GTFS-realtime service alerts, JSON flavour, no key.
+
+   Why not GTFS static: the zips at web.mta.info are plain http with no CORS
+   headers, so a browser cannot read them. That costs us stop_times.txt, which
+   is the authoritative stop ORDER — so this prototype derives order
+   geographically (nearest-neighbour chain from the end of the line). The Android
+   app has no such limit and reads the real GTFS sequence.
+   ============================================================ */
+const SRC = {
+  subwayStations: "https://data.ny.gov/resource/39hk-dx4f.json?$limit=2000",
+  busRoutes: "https://data.ny.gov/resource/ai5j-txmn.json?$select=route_id,route_short_name,route_long_name" +
+    "&$group=route_id,route_short_name,route_long_name&$where=in_effect='true'&$limit=5000",
+  busStops: (routeId) => "https://data.ny.gov/resource/ai5j-txmn.json?$select=stop_id,stop_name,direction_id," +
+    "direction,latitude,longitude&$where=in_effect='true' AND route_id='" + routeId + "'&$limit=2000",
+  subwayAlerts: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json",
+  busAlerts: "https://api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fbus-alerts.json"
+};
+
+/* ============================================================
+   MMD CHEVRONS
+
+   Vector paths lifted verbatim from MMD's own drawables
+   (mmd-core/src/main/res/drawable/chevron_{filled,dotted}_*.xml,
+   android:pathData -> <path d>, same 24x24 viewport). The dotted variants are
+   MMD's stippled "you are at the end of the list" state — the scrollbar swaps
+   filled for dotted rather than dimming, so this does the same.
+   ============================================================ */
+const CHEV = {
+  filledUp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13.347,6.001C12.621,5.215 11.379,5.215 10.653,6.001L3.84,13.382C2.756,14.556 3.589,16.458 5.187,16.458H18.813C20.411,16.458 21.244,14.556 20.16,13.382L13.347,6.001Z" fill="#000"/></svg>',
+  filledDown: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.653,17.999C11.379,18.785 12.621,18.785 13.347,17.999L20.16,10.618C21.244,9.444 20.411,7.542 18.813,7.542L5.187,7.542C3.589,7.542 2.756,9.444 3.84,10.618L10.653,17.999Z" fill="#000"/></svg>',
+  filledLeft: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6.001,13.347C5.215,12.621 5.215,11.379 6.001,10.653L13.382,3.84C14.556,2.756 16.458,3.589 16.458,5.187V18.813C16.458,20.411 14.556,21.244 13.382,20.16L6.001,13.347Z" fill="#000"/></svg>',
+  filledRight: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.999,13.347C18.785,12.621 18.785,11.379 17.999,10.653L10.618,3.84C9.444,2.756 7.542,3.589 7.542,5.187V18.813C7.542,20.411 9.444,21.244 10.618,20.16L17.999,13.347Z" fill="#000"/></svg>',
+  dottedUp: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.833,13.073L20.14,13.406C20.203,13.474 20.26,13.545 20.31,13.617C20.257,13.647 20.195,13.664 20.13,13.664C19.926,13.664 19.76,13.498 19.76,13.294C19.76,13.211 19.787,13.135 19.833,13.073Z" fill="#000"/><path d="M18.41,11.532L18.912,12.075C18.845,12.142 18.752,12.184 18.65,12.184C18.446,12.184 18.28,12.018 18.28,11.814C18.28,11.701 18.331,11.6 18.41,11.532Z" fill="#000"/><path d="M17.001,10.005L17.485,10.529C17.419,10.634 17.303,10.704 17.17,10.704C16.966,10.704 16.8,10.538 16.8,10.334C16.8,10.191 16.882,10.066 17.001,10.005Z" fill="#000"/><path d="M15.606,8.494L16.042,8.967C15.995,9.116 15.855,9.224 15.69,9.224C15.486,9.224 15.32,9.058 15.32,8.854C15.32,8.679 15.442,8.532 15.606,8.494Z" fill="#000"/><path d="M14.231,7.005L14.58,7.382C14.575,7.583 14.412,7.744 14.21,7.744C14.006,7.744 13.84,7.578 13.84,7.374C13.84,7.17 14.006,7.004 14.21,7.004C14.217,7.004 14.224,7.004 14.231,7.005Z" fill="#000"/><path d="M12.606,5.545C12.777,5.607 12.941,5.695 13.09,5.809C13.097,5.836 13.1,5.865 13.1,5.894C13.1,6.098 12.934,6.264 12.73,6.264C12.526,6.264 12.36,6.098 12.36,5.894C12.36,5.733 12.463,5.596 12.606,5.545Z" fill="#000"/><path d="M10.895,5.791C11.04,5.683 11.198,5.6 11.363,5.542C11.512,5.589 11.62,5.729 11.62,5.894C11.62,6.098 11.454,6.264 11.25,6.264C11.046,6.264 10.88,6.098 10.88,5.894C10.88,5.858 10.885,5.823 10.895,5.791Z" fill="#000"/><path d="M9.4,7.36L9.727,7.006C9.741,7.005 9.755,7.004 9.77,7.004C9.974,7.004 10.14,7.17 10.14,7.374C10.14,7.578 9.974,7.744 9.77,7.744C9.566,7.744 9.4,7.578 9.4,7.374C9.4,7.369 9.4,7.365 9.4,7.36Z" fill="#000"/><path d="M7.933,8.95L8.357,8.49C8.53,8.522 8.66,8.673 8.66,8.854C8.66,9.058 8.494,9.224 8.29,9.224C8.119,9.224 7.975,9.108 7.933,8.95Z" fill="#000"/><path d="M6.488,10.516L6.965,9.998C7.092,10.057 7.18,10.185 7.18,10.334C7.18,10.538 7.014,10.704 6.81,10.704C6.672,10.704 6.551,10.628 6.488,10.516Z" fill="#000"/><path d="M5.058,12.065L5.558,11.523C5.645,11.59 5.7,11.696 5.7,11.814C5.7,12.018 5.534,12.184 5.33,12.184C5.222,12.184 5.125,12.138 5.058,12.065Z" fill="#000"/><path d="M3.656,13.609C3.705,13.539 3.759,13.471 3.82,13.406L4.138,13.061C4.189,13.125 4.22,13.206 4.22,13.294C4.22,13.498 4.054,13.664 3.85,13.664C3.779,13.664 3.712,13.644 3.656,13.609Z" fill="#000"/><path d="M4.219,16.224C4.065,16.131 3.928,16.017 3.811,15.886C3.824,15.885 3.837,15.884 3.85,15.884C4.044,15.884 4.204,16.034 4.219,16.224Z" fill="#000"/><path d="M5.621,16.482H5.167C5.123,16.482 5.079,16.481 5.036,16.478C4.988,16.416 4.96,16.338 4.96,16.254C4.96,16.05 5.126,15.884 5.33,15.884C5.534,15.884 5.7,16.05 5.7,16.254C5.7,16.34 5.671,16.42 5.621,16.482Z" fill="#000"/><path d="M7.101,16.482H6.519C6.469,16.42 6.44,16.34 6.44,16.254C6.44,16.05 6.606,15.884 6.81,15.884C7.014,15.884 7.18,16.05 7.18,16.254C7.18,16.34 7.151,16.42 7.101,16.482Z" fill="#000"/><path d="M8.581,16.482H7.999C7.949,16.42 7.92,16.34 7.92,16.254C7.92,16.05 8.086,15.884 8.29,15.884C8.494,15.884 8.66,16.05 8.66,16.254C8.66,16.34 8.631,16.42 8.581,16.482Z" fill="#000"/><path d="M10.061,16.482H9.479C9.429,16.42 9.4,16.34 9.4,16.254C9.4,16.05 9.566,15.884 9.77,15.884C9.974,15.884 10.14,16.05 10.14,16.254C10.14,16.34 10.111,16.42 10.061,16.482Z" fill="#000"/><path d="M11.541,16.482H10.959C10.91,16.42 10.88,16.34 10.88,16.254C10.88,16.05 11.046,15.884 11.25,15.884C11.454,15.884 11.62,16.05 11.62,16.254C11.62,16.34 11.59,16.42 11.541,16.482Z" fill="#000"/><path d="M13.021,16.482H12.439C12.389,16.42 12.36,16.34 12.36,16.254C12.36,16.05 12.526,15.884 12.73,15.884C12.934,15.884 13.1,16.05 13.1,16.254C13.1,16.34 13.071,16.42 13.021,16.482Z" fill="#000"/><path d="M14.501,16.482H13.919C13.87,16.42 13.84,16.34 13.84,16.254C13.84,16.05 14.006,15.884 14.21,15.884C14.414,15.884 14.58,16.05 14.58,16.254C14.58,16.34 14.55,16.42 14.501,16.482Z" fill="#000"/><path d="M15.981,16.482H15.399C15.349,16.42 15.32,16.34 15.32,16.254C15.32,16.05 15.486,15.884 15.69,15.884C15.894,15.884 16.06,16.05 16.06,16.254C16.06,16.34 16.031,16.42 15.981,16.482Z" fill="#000"/><path d="M17.461,16.482H16.879C16.83,16.42 16.8,16.34 16.8,16.254C16.8,16.05 16.966,15.884 17.17,15.884C17.374,15.884 17.54,16.05 17.54,16.254C17.54,16.34 17.51,16.42 17.461,16.482Z" fill="#000"/><path d="M18.946,16.476C18.896,16.48 18.844,16.482 18.793,16.482H18.359C18.309,16.42 18.28,16.34 18.28,16.254C18.28,16.05 18.446,15.884 18.65,15.884C18.854,15.884 19.02,16.05 19.02,16.254C19.02,16.337 18.992,16.415 18.946,16.476Z" fill="#000"/><path d="M19.763,16.211C19.784,16.027 19.94,15.884 20.13,15.884C20.137,15.884 20.144,15.884 20.151,15.885C20.038,16.01 19.908,16.12 19.763,16.211Z" fill="#000"/><path d="M19.76,14.774C19.76,14.57 19.926,14.404 20.13,14.404C20.334,14.404 20.5,14.57 20.5,14.774C20.5,14.978 20.334,15.144 20.13,15.144C19.926,15.144 19.76,14.978 19.76,14.774Z" fill="#000"/><path d="M18.65,14.404C18.446,14.404 18.28,14.57 18.28,14.774C18.28,14.978 18.446,15.144 18.65,15.144C18.854,15.144 19.02,14.978 19.02,14.774C19.02,14.57 18.854,14.404 18.65,14.404Z" fill="#000"/><path d="M16.8,14.774C16.8,14.57 16.966,14.404 17.17,14.404C17.374,14.404 17.54,14.57 17.54,14.774C17.54,14.978 17.374,15.144 17.17,15.144C16.966,15.144 16.8,14.978 16.8,14.774Z" fill="#000"/><path d="M15.69,14.404C15.486,14.404 15.32,14.57 15.32,14.774C15.32,14.978 15.486,15.144 15.69,15.144C15.894,15.144 16.06,14.978 16.06,14.774C16.06,14.57 15.894,14.404 15.69,14.404Z" fill="#000"/><path d="M13.84,14.774C13.84,14.57 14.006,14.404 14.21,14.404C14.414,14.404 14.58,14.57 14.58,14.774C14.58,14.978 14.414,15.144 14.21,15.144C14.006,15.144 13.84,14.978 13.84,14.774Z" fill="#000"/><path d="M12.73,14.404C12.526,14.404 12.36,14.57 12.36,14.774C12.36,14.978 12.526,15.144 12.73,15.144C12.934,15.144 13.1,14.978 13.1,14.774C13.1,14.57 12.934,14.404 12.73,14.404Z" fill="#000"/><path d="M10.88,14.774C10.88,14.57 11.046,14.404 11.25,14.404C11.454,14.404 11.62,14.57 11.62,14.774C11.62,14.978 11.454,15.144 11.25,15.144C11.046,15.144 10.88,14.978 10.88,14.774Z" fill="#000"/><path d="M9.77,14.404C9.566,14.404 9.4,14.57 9.4,14.774C9.4,14.978 9.566,15.144 9.77,15.144C9.974,15.144 10.14,14.978 10.14,14.774C10.14,14.57 9.974,14.404 9.77,14.404Z" fill="#000"/><path d="M7.92,14.774C7.92,14.57 8.086,14.404 8.29,14.404C8.494,14.404 8.66,14.57 8.66,14.774C8.66,14.978 8.494,15.144 8.29,15.144C8.086,15.144 7.92,14.978 7.92,14.774Z" fill="#000"/><path d="M6.81,14.404C6.606,14.404 6.44,14.57 6.44,14.774C6.44,14.978 6.606,15.144 6.81,15.144C7.014,15.144 7.18,14.978 7.18,14.774C7.18,14.57 7.014,14.404 6.81,14.404Z" fill="#000"/><path d="M4.96,14.774C4.96,14.57 5.126,14.404 5.33,14.404C5.534,14.404 5.7,14.57 5.7,14.774C5.7,14.978 5.534,15.144 5.33,15.144C5.126,15.144 4.96,14.978 4.96,14.774Z" fill="#000"/><path d="M3.85,14.404C3.646,14.404 3.48,14.57 3.48,14.774C3.48,14.978 3.646,15.144 3.85,15.144C4.054,15.144 4.22,14.978 4.22,14.774C4.22,14.57 4.054,14.404 3.85,14.404Z" fill="#000"/><path d="M18.65,12.924C18.446,12.924 18.28,13.09 18.28,13.294C18.28,13.498 18.446,13.664 18.65,13.664C18.854,13.664 19.02,13.498 19.02,13.294C19.02,13.09 18.854,12.924 18.65,12.924Z" fill="#000"/><path d="M16.8,13.294C16.8,13.09 16.966,12.924 17.17,12.924C17.374,12.924 17.54,13.09 17.54,13.294C17.54,13.498 17.374,13.664 17.17,13.664C16.966,13.664 16.8,13.498 16.8,13.294Z" fill="#000"/><path d="M15.69,12.924C15.486,12.924 15.32,13.09 15.32,13.294C15.32,13.498 15.486,13.664 15.69,13.664C15.894,13.664 16.06,13.498 16.06,13.294C16.06,13.09 15.894,12.924 15.69,12.924Z" fill="#000"/><path d="M13.84,13.294C13.84,13.09 14.006,12.924 14.21,12.924C14.414,12.924 14.58,13.09 14.58,13.294C14.58,13.498 14.414,13.664 14.21,13.664C14.006,13.664 13.84,13.498 13.84,13.294Z" fill="#000"/><path d="M12.73,12.924C12.526,12.924 12.36,13.09 12.36,13.294C12.36,13.498 12.526,13.664 12.73,13.664C12.934,13.664 13.1,13.498 13.1,13.294C13.1,13.09 12.934,12.924 12.73,12.924Z" fill="#000"/><path d="M10.88,13.294C10.88,13.09 11.046,12.924 11.25,12.924C11.454,12.924 11.62,13.09 11.62,13.294C11.62,13.498 11.454,13.664 11.25,13.664C11.046,13.664 10.88,13.498 10.88,13.294Z" fill="#000"/><path d="M9.77,12.924C9.566,12.924 9.4,13.09 9.4,13.294C9.4,13.498 9.566,13.664 9.77,13.664C9.974,13.664 10.14,13.498 10.14,13.294C10.14,13.09 9.974,12.924 9.77,12.924Z" fill="#000"/><path d="M7.92,13.294C7.92,13.09 8.086,12.924 8.29,12.924C8.494,12.924 8.66,13.09 8.66,13.294C8.66,13.498 8.494,13.664 8.29,13.664C8.086,13.664 7.92,13.498 7.92,13.294Z" fill="#000"/><path d="M6.81,12.924C6.606,12.924 6.44,13.09 6.44,13.294C6.44,13.498 6.606,13.664 6.81,13.664C7.014,13.664 7.18,13.498 7.18,13.294C7.18,13.09 7.014,12.924 6.81,12.924Z" fill="#000"/><path d="M4.96,13.294C4.96,13.09 5.126,12.924 5.33,12.924C5.534,12.924 5.7,13.09 5.7,13.294C5.7,13.498 5.534,13.664 5.33,13.664C5.126,13.664 4.96,13.498 4.96,13.294Z" fill="#000"/><path d="M16.8,11.814C16.8,11.61 16.966,11.444 17.17,11.444C17.374,11.444 17.54,11.61 17.54,11.814C17.54,12.018 17.374,12.184 17.17,12.184C16.966,12.184 16.8,12.018 16.8,11.814Z" fill="#000"/><path d="M15.69,11.444C15.486,11.444 15.32,11.61 15.32,11.814C15.32,12.018 15.486,12.184 15.69,12.184C15.894,12.184 16.06,12.018 16.06,11.814C16.06,11.61 15.894,11.444 15.69,11.444Z" fill="#000"/><path d="M13.84,11.814C13.84,11.61 14.006,11.444 14.21,11.444C14.414,11.444 14.58,11.61 14.58,11.814C14.58,12.018 14.414,12.184 14.21,12.184C14.006,12.184 13.84,12.018 13.84,11.814Z" fill="#000"/><path d="M12.73,11.444C12.526,11.444 12.36,11.61 12.36,11.814C12.36,12.018 12.526,12.184 12.73,12.184C12.934,12.184 13.1,12.018 13.1,11.814C13.1,11.61 12.934,11.444 12.73,11.444Z" fill="#000"/><path d="M10.88,11.814C10.88,11.61 11.046,11.444 11.25,11.444C11.454,11.444 11.62,11.61 11.62,11.814C11.62,12.018 11.454,12.184 11.25,12.184C11.046,12.184 10.88,12.018 10.88,11.814Z" fill="#000"/><path d="M9.77,11.444C9.566,11.444 9.4,11.61 9.4,11.814C9.4,12.018 9.566,12.184 9.77,12.184C9.974,12.184 10.14,12.018 10.14,11.814C10.14,11.61 9.974,11.444 9.77,11.444Z" fill="#000"/><path d="M7.92,11.814C7.92,11.61 8.086,11.444 8.29,11.444C8.494,11.444 8.66,11.61 8.66,11.814C8.66,12.018 8.494,12.184 8.29,12.184C8.086,12.184 7.92,12.018 7.92,11.814Z" fill="#000"/><path d="M6.81,11.444C6.606,11.444 6.44,11.61 6.44,11.814C6.44,12.018 6.606,12.184 6.81,12.184C7.014,12.184 7.18,12.018 7.18,11.814C7.18,11.61 7.014,11.444 6.81,11.444Z" fill="#000"/><path d="M15.69,9.964C15.486,9.964 15.32,10.13 15.32,10.334C15.32,10.538 15.486,10.704 15.69,10.704C15.894,10.704 16.06,10.538 16.06,10.334C16.06,10.13 15.894,9.964 15.69,9.964Z" fill="#000"/><path d="M13.84,10.334C13.84,10.13 14.006,9.964 14.21,9.964C14.414,9.964 14.58,10.13 14.58,10.334C14.58,10.538 14.414,10.704 14.21,10.704C14.006,10.704 13.84,10.538 13.84,10.334Z" fill="#000"/><path d="M12.73,9.964C12.526,9.964 12.36,10.13 12.36,10.334C12.36,10.538 12.526,10.704 12.73,10.704C12.934,10.704 13.1,10.538 13.1,10.334C13.1,10.13 12.934,9.964 12.73,9.964Z" fill="#000"/><path d="M10.88,10.334C10.88,10.13 11.046,9.964 11.25,9.964C11.454,9.964 11.62,10.13 11.62,10.334C11.62,10.538 11.454,10.704 11.25,10.704C11.046,10.704 10.88,10.538 10.88,10.334Z" fill="#000"/><path d="M9.77,9.964C9.566,9.964 9.4,10.13 9.4,10.334C9.4,10.538 9.566,10.704 9.77,10.704C9.974,10.704 10.14,10.538 10.14,10.334C10.14,10.13 9.974,9.964 9.77,9.964Z" fill="#000"/><path d="M7.92,10.334C7.92,10.13 8.086,9.964 8.29,9.964C8.494,9.964 8.66,10.13 8.66,10.334C8.66,10.538 8.494,10.704 8.29,10.704C8.086,10.704 7.92,10.538 7.92,10.334Z" fill="#000"/><path d="M13.84,8.854C13.84,8.65 14.006,8.484 14.21,8.484C14.414,8.484 14.58,8.65 14.58,8.854C14.58,9.058 14.414,9.224 14.21,9.224C14.006,9.224 13.84,9.058 13.84,8.854Z" fill="#000"/><path d="M12.73,8.484C12.526,8.484 12.36,8.65 12.36,8.854C12.36,9.058 12.526,9.224 12.73,9.224C12.934,9.224 13.1,9.058 13.1,8.854C13.1,8.65 12.934,8.484 12.73,8.484Z" fill="#000"/><path d="M10.88,8.854C10.88,8.65 11.046,8.484 11.25,8.484C11.454,8.484 11.62,8.65 11.62,8.854C11.62,9.058 11.454,9.224 11.25,9.224C11.046,9.224 10.88,9.058 10.88,8.854Z" fill="#000"/><path d="M9.77,8.484C9.566,8.484 9.4,8.65 9.4,8.854C9.4,9.058 9.566,9.224 9.77,9.224C9.974,9.224 10.14,9.058 10.14,8.854C10.14,8.65 9.974,8.484 9.77,8.484Z" fill="#000"/><path d="M12.73,7.004C12.526,7.004 12.36,7.17 12.36,7.374C12.36,7.578 12.526,7.744 12.73,7.744C12.934,7.744 13.1,7.578 13.1,7.374C13.1,7.17 12.934,7.004 12.73,7.004Z" fill="#000"/><path d="M10.88,7.374C10.88,7.17 11.046,7.004 11.25,7.004C11.454,7.004 11.62,7.17 11.62,7.374C11.62,7.578 11.454,7.744 11.25,7.744C11.046,7.744 10.88,7.578 10.88,7.374Z" fill="#000"/></svg>',
+  dottedDown: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4.147,10.951L3.84,10.618C3.777,10.55 3.72,10.479 3.67,10.407C3.723,10.377 3.785,10.36 3.85,10.36C4.054,10.36 4.22,10.526 4.22,10.73C4.22,10.813 4.193,10.889 4.147,10.951Z" fill="#000"/><path d="M5.57,12.492L5.068,11.949C5.135,11.882 5.228,11.84 5.33,11.84C5.534,11.84 5.7,12.006 5.7,12.21C5.7,12.323 5.649,12.424 5.57,12.492Z" fill="#000"/><path d="M6.979,14.019L6.495,13.495C6.561,13.39 6.677,13.32 6.81,13.32C7.014,13.32 7.18,13.486 7.18,13.69C7.18,13.833 7.098,13.958 6.979,14.019Z" fill="#000"/><path d="M8.374,15.53L7.938,15.057C7.985,14.908 8.125,14.8 8.29,14.8C8.494,14.8 8.66,14.966 8.66,15.17C8.66,15.345 8.538,15.492 8.374,15.53Z" fill="#000"/><path d="M9.749,17.019L9.4,16.642C9.405,16.441 9.568,16.28 9.77,16.28C9.974,16.28 10.14,16.446 10.14,16.65C10.14,16.854 9.974,17.02 9.77,17.02C9.763,17.02 9.756,17.02 9.749,17.019Z" fill="#000"/><path d="M11.373,18.479C11.203,18.417 11.039,18.329 10.89,18.215C10.883,18.188 10.88,18.159 10.88,18.13C10.88,17.926 11.046,17.76 11.25,17.76C11.454,17.76 11.62,17.926 11.62,18.13C11.62,18.291 11.517,18.428 11.373,18.479Z" fill="#000"/><path d="M13.085,18.233C12.94,18.341 12.782,18.424 12.617,18.482C12.468,18.435 12.36,18.295 12.36,18.13C12.36,17.926 12.526,17.76 12.73,17.76C12.934,17.76 13.1,17.926 13.1,18.13C13.1,18.166 13.095,18.201 13.085,18.233Z" fill="#000"/><path d="M14.58,16.664L14.253,17.018C14.239,17.019 14.224,17.02 14.21,17.02C14.006,17.02 13.84,16.854 13.84,16.65C13.84,16.446 14.006,16.28 14.21,16.28C14.414,16.28 14.58,16.446 14.58,16.65C14.58,16.655 14.58,16.659 14.58,16.664Z" fill="#000"/><path d="M16.047,15.074L15.623,15.534C15.45,15.502 15.32,15.351 15.32,15.17C15.32,14.966 15.486,14.8 15.69,14.8C15.861,14.8 16.005,14.916 16.047,15.074Z" fill="#000"/><path d="M17.492,13.508L17.014,14.026C16.888,13.967 16.8,13.839 16.8,13.69C16.8,13.486 16.966,13.32 17.17,13.32C17.308,13.32 17.429,13.396 17.492,13.508Z" fill="#000"/><path d="M18.922,11.959L18.422,12.501C18.336,12.434 18.28,12.328 18.28,12.21C18.28,12.006 18.446,11.84 18.65,11.84C18.758,11.84 18.854,11.886 18.922,11.959Z" fill="#000"/><path d="M20.324,10.415C20.275,10.485 20.221,10.553 20.16,10.618L19.842,10.963C19.791,10.899 19.76,10.818 19.76,10.73C19.76,10.526 19.926,10.36 20.13,10.36C20.201,10.36 20.268,10.38 20.324,10.415Z" fill="#000"/><path d="M19.761,7.8C19.915,7.893 20.052,8.007 20.169,8.138C20.156,8.139 20.143,8.14 20.13,8.14C19.936,8.14 19.777,7.99 19.761,7.8Z" fill="#000"/><path d="M18.359,7.542H18.813C18.857,7.542 18.901,7.543 18.944,7.546C18.992,7.608 19.02,7.686 19.02,7.77C19.02,7.974 18.854,8.14 18.65,8.14C18.446,8.14 18.28,7.974 18.28,7.77C18.28,7.684 18.309,7.605 18.359,7.542Z" fill="#000"/><path d="M16.879,7.542H17.461C17.51,7.605 17.54,7.684 17.54,7.77C17.54,7.974 17.374,8.14 17.17,8.14C16.966,8.14 16.8,7.974 16.8,7.77C16.8,7.684 16.83,7.605 16.879,7.542Z" fill="#000"/><path d="M15.399,7.542H15.981C16.031,7.605 16.06,7.684 16.06,7.77C16.06,7.974 15.894,8.14 15.69,8.14C15.486,8.14 15.32,7.974 15.32,7.77C15.32,7.684 15.349,7.605 15.399,7.542Z" fill="#000"/><path d="M13.919,7.542H14.501C14.55,7.605 14.58,7.684 14.58,7.77C14.58,7.974 14.414,8.14 14.21,8.14C14.006,8.14 13.84,7.974 13.84,7.77C13.84,7.684 13.87,7.605 13.919,7.542Z" fill="#000"/><path d="M12.439,7.542H13.021C13.071,7.605 13.1,7.684 13.1,7.77C13.1,7.974 12.934,8.14 12.73,8.14C12.526,8.14 12.36,7.974 12.36,7.77C12.36,7.684 12.389,7.605 12.439,7.542Z" fill="#000"/><path d="M10.959,7.542H11.541C11.59,7.605 11.62,7.684 11.62,7.77C11.62,7.974 11.454,8.14 11.25,8.14C11.046,8.14 10.88,7.974 10.88,7.77C10.88,7.684 10.91,7.605 10.959,7.542Z" fill="#000"/><path d="M9.479,7.542H10.061C10.111,7.605 10.14,7.684 10.14,7.77C10.14,7.974 9.974,8.14 9.77,8.14C9.566,8.14 9.4,7.974 9.4,7.77C9.4,7.684 9.429,7.605 9.479,7.542Z" fill="#000"/><path d="M7.999,7.542H8.581C8.631,7.605 8.66,7.684 8.66,7.77C8.66,7.974 8.494,8.14 8.29,8.14C8.086,8.14 7.92,7.974 7.92,7.77C7.92,7.684 7.949,7.605 7.999,7.542Z" fill="#000"/><path d="M6.519,7.542H7.101C7.151,7.605 7.18,7.684 7.18,7.77C7.18,7.974 7.014,8.14 6.81,8.14C6.606,8.14 6.44,7.974 6.44,7.77C6.44,7.684 6.469,7.605 6.519,7.542Z" fill="#000"/><path d="M5.034,7.548C5.084,7.544 5.135,7.542 5.187,7.542H5.621C5.671,7.605 5.7,7.684 5.7,7.77C5.7,7.974 5.534,8.14 5.33,8.14C5.126,8.14 4.96,7.974 4.96,7.77C4.96,7.687 4.988,7.609 5.034,7.548Z" fill="#000"/><path d="M4.218,7.813C4.196,7.997 4.04,8.14 3.85,8.14C3.843,8.14 3.836,8.14 3.829,8.139C3.942,8.014 4.072,7.904 4.218,7.813Z" fill="#000"/><path d="M4.22,9.25C4.22,9.454 4.054,9.62 3.85,9.62C3.646,9.62 3.48,9.454 3.48,9.25C3.48,9.046 3.646,8.88 3.85,8.88C4.054,8.88 4.22,9.046 4.22,9.25Z" fill="#000"/><path d="M5.33,9.62C5.534,9.62 5.7,9.454 5.7,9.25C5.7,9.046 5.534,8.88 5.33,8.88C5.126,8.88 4.96,9.046 4.96,9.25C4.96,9.454 5.126,9.62 5.33,9.62Z" fill="#000"/><path d="M7.18,9.25C7.18,9.454 7.014,9.62 6.81,9.62C6.606,9.62 6.44,9.454 6.44,9.25C6.44,9.046 6.606,8.88 6.81,8.88C7.014,8.88 7.18,9.046 7.18,9.25Z" fill="#000"/><path d="M8.29,9.62C8.494,9.62 8.66,9.454 8.66,9.25C8.66,9.046 8.494,8.88 8.29,8.88C8.086,8.88 7.92,9.046 7.92,9.25C7.92,9.454 8.086,9.62 8.29,9.62Z" fill="#000"/><path d="M10.14,9.25C10.14,9.454 9.974,9.62 9.77,9.62C9.566,9.62 9.4,9.454 9.4,9.25C9.4,9.046 9.566,8.88 9.77,8.88C9.974,8.88 10.14,9.046 10.14,9.25Z" fill="#000"/><path d="M11.25,9.62C11.454,9.62 11.62,9.454 11.62,9.25C11.62,9.046 11.454,8.88 11.25,8.88C11.046,8.88 10.88,9.046 10.88,9.25C10.88,9.454 11.046,9.62 11.25,9.62Z" fill="#000"/><path d="M13.1,9.25C13.1,9.454 12.934,9.62 12.73,9.62C12.526,9.62 12.36,9.454 12.36,9.25C12.36,9.046 12.526,8.88 12.73,8.88C12.934,8.88 13.1,9.046 13.1,9.25Z" fill="#000"/><path d="M14.21,9.62C14.414,9.62 14.58,9.454 14.58,9.25C14.58,9.046 14.414,8.88 14.21,8.88C14.006,8.88 13.84,9.046 13.84,9.25C13.84,9.454 14.006,9.62 14.21,9.62Z" fill="#000"/><path d="M16.06,9.25C16.06,9.454 15.894,9.62 15.69,9.62C15.486,9.62 15.32,9.454 15.32,9.25C15.32,9.046 15.486,8.88 15.69,8.88C15.894,8.88 16.06,9.046 16.06,9.25Z" fill="#000"/><path d="M17.17,9.62C17.374,9.62 17.54,9.454 17.54,9.25C17.54,9.046 17.374,8.88 17.17,8.88C16.966,8.88 16.8,9.046 16.8,9.25C16.8,9.454 16.966,9.62 17.17,9.62Z" fill="#000"/><path d="M19.02,9.25C19.02,9.454 18.854,9.62 18.65,9.62C18.446,9.62 18.28,9.454 18.28,9.25C18.28,9.046 18.446,8.88 18.65,8.88C18.854,8.88 19.02,9.046 19.02,9.25Z" fill="#000"/><path d="M20.13,9.62C20.334,9.62 20.5,9.454 20.5,9.25C20.5,9.046 20.334,8.88 20.13,8.88C19.926,8.88 19.76,9.046 19.76,9.25C19.76,9.454 19.926,9.62 20.13,9.62Z" fill="#000"/><path d="M5.33,11.1C5.534,11.1 5.7,10.934 5.7,10.73C5.7,10.526 5.534,10.36 5.33,10.36C5.126,10.36 4.96,10.526 4.96,10.73C4.96,10.934 5.126,11.1 5.33,11.1Z" fill="#000"/><path d="M7.18,10.73C7.18,10.934 7.014,11.1 6.81,11.1C6.606,11.1 6.44,10.934 6.44,10.73C6.44,10.526 6.606,10.36 6.81,10.36C7.014,10.36 7.18,10.526 7.18,10.73Z" fill="#000"/><path d="M8.29,11.1C8.494,11.1 8.66,10.934 8.66,10.73C8.66,10.526 8.494,10.36 8.29,10.36C8.086,10.36 7.92,10.526 7.92,10.73C7.92,10.934 8.086,11.1 8.29,11.1Z" fill="#000"/><path d="M10.14,10.73C10.14,10.934 9.974,11.1 9.77,11.1C9.566,11.1 9.4,10.934 9.4,10.73C9.4,10.526 9.566,10.36 9.77,10.36C9.974,10.36 10.14,10.526 10.14,10.73Z" fill="#000"/><path d="M11.25,11.1C11.454,11.1 11.62,10.934 11.62,10.73C11.62,10.526 11.454,10.36 11.25,10.36C11.046,10.36 10.88,10.526 10.88,10.73C10.88,10.934 11.046,11.1 11.25,11.1Z" fill="#000"/><path d="M13.1,10.73C13.1,10.934 12.934,11.1 12.73,11.1C12.526,11.1 12.36,10.934 12.36,10.73C12.36,10.526 12.526,10.36 12.73,10.36C12.934,10.36 13.1,10.526 13.1,10.73Z" fill="#000"/><path d="M14.21,11.1C14.414,11.1 14.58,10.934 14.58,10.73C14.58,10.526 14.414,10.36 14.21,10.36C14.006,10.36 13.84,10.526 13.84,10.73C13.84,10.934 14.006,11.1 14.21,11.1Z" fill="#000"/><path d="M16.06,10.73C16.06,10.934 15.894,11.1 15.69,11.1C15.486,11.1 15.32,10.934 15.32,10.73C15.32,10.526 15.486,10.36 15.69,10.36C15.894,10.36 16.06,10.526 16.06,10.73Z" fill="#000"/><path d="M17.17,11.1C17.374,11.1 17.54,10.934 17.54,10.73C17.54,10.526 17.374,10.36 17.17,10.36C16.966,10.36 16.8,10.526 16.8,10.73C16.8,10.934 16.966,11.1 17.17,11.1Z" fill="#000"/><path d="M19.02,10.73C19.02,10.934 18.854,11.1 18.65,11.1C18.446,11.1 18.28,10.934 18.28,10.73C18.28,10.526 18.446,10.36 18.65,10.36C18.854,10.36 19.02,10.526 19.02,10.73Z" fill="#000"/><path d="M7.18,12.21C7.18,12.414 7.014,12.58 6.81,12.58C6.606,12.58 6.44,12.414 6.44,12.21C6.44,12.006 6.606,11.84 6.81,11.84C7.014,11.84 7.18,12.006 7.18,12.21Z" fill="#000"/><path d="M8.29,12.58C8.494,12.58 8.66,12.414 8.66,12.21C8.66,12.006 8.494,11.84 8.29,11.84C8.086,11.84 7.92,12.006 7.92,12.21C7.92,12.414 8.086,12.58 8.29,12.58Z" fill="#000"/><path d="M10.14,12.21C10.14,12.414 9.974,12.58 9.77,12.58C9.566,12.58 9.4,12.414 9.4,12.21C9.4,12.006 9.566,11.84 9.77,11.84C9.974,11.84 10.14,12.006 10.14,12.21Z" fill="#000"/><path d="M11.25,12.58C11.454,12.58 11.62,12.414 11.62,12.21C11.62,12.006 11.454,11.84 11.25,11.84C11.046,11.84 10.88,12.006 10.88,12.21C10.88,12.414 11.046,12.58 11.25,12.58Z" fill="#000"/><path d="M13.1,12.21C13.1,12.414 12.934,12.58 12.73,12.58C12.526,12.58 12.36,12.414 12.36,12.21C12.36,12.006 12.526,11.84 12.73,11.84C12.934,11.84 13.1,12.006 13.1,12.21Z" fill="#000"/><path d="M14.21,12.58C14.414,12.58 14.58,12.414 14.58,12.21C14.58,12.006 14.414,11.84 14.21,11.84C14.006,11.84 13.84,12.006 13.84,12.21C13.84,12.414 14.006,12.58 14.21,12.58Z" fill="#000"/><path d="M16.06,12.21C16.06,12.414 15.894,12.58 15.69,12.58C15.486,12.58 15.32,12.414 15.32,12.21C15.32,12.006 15.486,11.84 15.69,11.84C15.894,11.84 16.06,12.006 16.06,12.21Z" fill="#000"/><path d="M17.17,12.58C17.374,12.58 17.54,12.414 17.54,12.21C17.54,12.006 17.374,11.84 17.17,11.84C16.966,11.84 16.8,12.006 16.8,12.21C16.8,12.414 16.966,12.58 17.17,12.58Z" fill="#000"/><path d="M8.29,14.06C8.494,14.06 8.66,13.894 8.66,13.69C8.66,13.486 8.494,13.32 8.29,13.32C8.086,13.32 7.92,13.486 7.92,13.69C7.92,13.894 8.086,14.06 8.29,14.06Z" fill="#000"/><path d="M10.14,13.69C10.14,13.894 9.974,14.06 9.77,14.06C9.566,14.06 9.4,13.894 9.4,13.69C9.4,13.486 9.566,13.32 9.77,13.32C9.974,13.32 10.14,13.486 10.14,13.69Z" fill="#000"/><path d="M11.25,14.06C11.454,14.06 11.62,13.894 11.62,13.69C11.62,13.486 11.454,13.32 11.25,13.32C11.046,13.32 10.88,13.486 10.88,13.69C10.88,13.894 11.046,14.06 11.25,14.06Z" fill="#000"/><path d="M13.1,13.69C13.1,13.894 12.934,14.06 12.73,14.06C12.526,14.06 12.36,13.894 12.36,13.69C12.36,13.486 12.526,13.32 12.73,13.32C12.934,13.32 13.1,13.486 13.1,13.69Z" fill="#000"/><path d="M14.21,14.06C14.414,14.06 14.58,13.894 14.58,13.69C14.58,13.486 14.414,13.32 14.21,13.32C14.006,13.32 13.84,13.486 13.84,13.69C13.84,13.894 14.006,14.06 14.21,14.06Z" fill="#000"/><path d="M16.06,13.69C16.06,13.894 15.894,14.06 15.69,14.06C15.486,14.06 15.32,13.894 15.32,13.69C15.32,13.486 15.486,13.32 15.69,13.32C15.894,13.32 16.06,13.486 16.06,13.69Z" fill="#000"/><path d="M10.14,15.17C10.14,15.374 9.974,15.54 9.77,15.54C9.566,15.54 9.4,15.374 9.4,15.17C9.4,14.966 9.566,14.8 9.77,14.8C9.974,14.8 10.14,14.966 10.14,15.17Z" fill="#000"/><path d="M11.25,15.54C11.454,15.54 11.62,15.374 11.62,15.17C11.62,14.966 11.454,14.8 11.25,14.8C11.046,14.8 10.88,14.966 10.88,15.17C10.88,15.374 11.046,15.54 11.25,15.54Z" fill="#000"/><path d="M13.1,15.17C13.1,15.374 12.934,15.54 12.73,15.54C12.526,15.54 12.36,15.374 12.36,15.17C12.36,14.966 12.526,14.8 12.73,14.8C12.934,14.8 13.1,14.966 13.1,15.17Z" fill="#000"/><path d="M14.21,15.54C14.414,15.54 14.58,15.374 14.58,15.17C14.58,14.966 14.414,14.8 14.21,14.8C14.006,14.8 13.84,14.966 13.84,15.17C13.84,15.374 14.006,15.54 14.21,15.54Z" fill="#000"/><path d="M11.25,17.02C11.454,17.02 11.62,16.854 11.62,16.65C11.62,16.446 11.454,16.28 11.25,16.28C11.046,16.28 10.88,16.446 10.88,16.65C10.88,16.854 11.046,17.02 11.25,17.02Z" fill="#000"/><path d="M13.1,16.65C13.1,16.854 12.934,17.02 12.73,17.02C12.526,17.02 12.36,16.854 12.36,16.65C12.36,16.446 12.526,16.28 12.73,16.28C12.934,16.28 13.1,16.446 13.1,16.65Z" fill="#000"/></svg>'
+};
+const CHEV_UP = CHEV.filledUp;
+const CHEV_DOWN = CHEV.filledDown;
+const CHEV_LEFT = CHEV.filledLeft;
+const CHEV_RIGHT = CHEV.filledRight;
+
+/* ============================================================
+   STATE
+   ============================================================ */
+const S = {
+  subway: { status: "idle", stations: [], routes: [] },
+  bus: { status: "idle", routes: [], byBorough: {} },
+  alerts: { train: null, bus: null },
+  stops: {},          // cache: "train:7" / "bus:M15" -> {status, dirs:[{label, stops:[names]}]}
+  error: {}
+};
+
+async function getJSON(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error("HTTP " + r.status);
+  return r.json();
+}
+
+/* ---- alerts ---------------------------------------------------------- */
+/**
+ * MTA's mercury alert text is not clean prose: it carries "[accessibility icon]"
+ * placeholders meant to be swapped for a glyph, "[N]" route-bullet placeholders,
+ * and pipe-delimited station runs. Rendered verbatim that reads as punctuation
+ * soup, so normalise here — at the feed boundary — rather than in the view.
+ */
+function normaliseAlertText(raw){
+  let t = (raw || "").replace(/\r/g, "");
+  // icon placeholders: "[accessibility icon]", "[shuttle bus icon]", "[elevator icon]"…
+  t = t.replace(/\[[^\]]*\bicon\b[^\]]*\]/gi, "");
+  t = t.replace(/\[\s*(accessibility|ada)[^\]]*\]/gi, "");
+  t = t.replace(/<[^>]+>/g, "");                              // stray markup
+  // "[1][2][N]" -> "1 2 N" so route bullets read as a list of lines
+  t = t.replace(/(?:\[[A-Z0-9]{1,3}\])+/g, m =>
+    (m.match(/\[([A-Z0-9]{1,3})\]/g) || []).map(x => x.slice(1, -1)).join(" "));
+  // pipe-delimited station runs become their own lines
+  t = t.split("|").map(s => s.replace(/[ \t]+/g, " ").trim()).filter(Boolean).join("\n");
+  return t.replace(/\n{2,}/g, "\n").trim();
+}
+
+function textOf(node){
+  const list = node && node.translation;
+  if(!list || !list.length) return "";
+  const en = list.find(t => t.language === "en") || list[0];
+  return normaliseAlertText(en && en.text);
+}
+
+function alertType(a){
+  const merc = a["transit_realtime.mercury_alert"];
+  if(merc && merc.alert_type) return merc.alert_type;
+  switch(a.effect){
+    case "SIGNIFICANT_DELAYS":
+    case "REDUCED_SERVICE": return "Delay";
+    case "DETOUR": return "Planned reroute";
+    case "MODIFIED_SERVICE": return "Planned change";
+    case "STOP_MOVED":
+    case "NO_SERVICE": return "Service change";
+    default: return "Service notice";
+  }
+}
+
+async function loadAlerts(mode){
+  if(S.alerts[mode]) return S.alerts[mode];
+  const feed = await getJSON(mode === "train" ? SRC.subwayAlerts : SRC.busAlerts);
+  const byRoute = {};
+  (feed.entity || []).forEach(e => {
+    const a = e.alert;
+    if(!a) return;
+    const body = textOf(a.description_text) || textOf(a.header_text);
+    if(!body) return;
+    const routes = new Set(), stops = new Set();
+    (a.informed_entity || []).forEach(ie => {
+      if(ie.route_id) routes.add(ie.route_id);
+      if(ie.stop_id) stops.add(ie.stop_id);
+    });
+    if(!routes.size) return;
+    const item = { type: alertType(a), text: body, stopIds: [...stops] };
+    routes.forEach(rt => { (byRoute[rt] = byRoute[rt] || []).push(item); });
+  });
+  S.alerts[mode] = { byRoute, at: Date.now() };
+  return S.alerts[mode];
+}
+
+function alertsFor(mode, code){
+  const bundle = S.alerts[mode];
+  return bundle && bundle.byRoute[code] || [];
+}
+
+/* ---- catalogue ------------------------------------------------------- */
+function routeOrder(a, b){
+  const pa = a.replace(/[0-9].*$/, ""), pb = b.replace(/[0-9].*$/, "");
+  if(pa !== pb) return pa.localeCompare(pb);
+  const na = parseInt(a.replace(/^[^0-9]*/, ""), 10) || 0;
+  const nb = parseInt(b.replace(/^[^0-9]*/, ""), 10) || 0;
+  return na - nb || a.localeCompare(b);
+}
+
+async function loadSubwayCatalogue(){
+  if(S.subway.status === "ready" || S.subway.status === "loading") return;
+  S.subway.status = "loading"; render(false);
+  try{
+    const [stations] = await Promise.all([getJSON(SRC.subwayStations), loadAlerts("train")]);
+    S.subway.stations = stations;
+    const set = new Set();
+    stations.forEach(st => (st.daytime_routes || "").split(/\s+/).forEach(r => r && set.add(r)));
+    S.subway.routes = [...set].sort(routeOrder);
+    S.subway.status = "ready";
+  }catch(e){
+    S.subway.status = "failed"; S.error.subway = e.message;
+  }
+  render(false);
+}
+
+const BOROUGH_ORDER = ["Manhattan","Bronx","Brooklyn","Queens","Staten Island","Express"];
+
+function boroughFor(code){
+  if(/^SIM/i.test(code)) return "Staten Island";
+  if(/^(BxM|QM|BM|X)\d/i.test(code)) return "Express";
+  if(/^Bx/i.test(code)) return "Bronx";
+  if(/^B/i.test(code)) return "Brooklyn";
+  if(/^M/i.test(code)) return "Manhattan";
+  if(/^Q/i.test(code)) return "Queens";
+  if(/^S/i.test(code)) return "Staten Island";
+  return "Express";
+}
+
+async function loadBusCatalogue(){
+  if(S.bus.status === "ready" || S.bus.status === "loading") return;
+  S.bus.status = "loading"; render(false);
+  try{
+    const [rows] = await Promise.all([getJSON(SRC.busRoutes), loadAlerts("bus")]);
+    const seen = {};
+    rows.forEach(r => {
+      const code = (r.route_short_name || r.route_id || "").trim();
+      if(!code || seen[code]) return;
+      seen[code] = { code, id: r.route_id, name: (r.route_long_name || "").trim() };
+    });
+    const routes = Object.values(seen).sort((a,b) => routeOrder(a.code, b.code));
+    const byBorough = {};
+    BOROUGH_ORDER.forEach(b => byBorough[b] = []);
+    routes.forEach(r => byBorough[boroughFor(r.code)].push(r));
+    S.bus.routes = routes;
+    S.bus.byBorough = byBorough;
+    S.bus.status = "ready";
+  }catch(e){
+    S.bus.status = "failed"; S.error.bus = e.message;
+  }
+  render(false);
+}
+
+/* ---- stop order ------------------------------------------------------
+   GTFS stop_times is not reachable from a browser, so order is derived:
+   start at the point furthest from the centroid (a terminus on a linear
+   route) and chain nearest neighbours. Good for the overwhelmingly linear
+   NYC routes; loops and branches are approximate. -------------------- */
+function orderGeographically(points){
+  if(points.length < 3) return points;
+  const cx = points.reduce((s,p) => s + p.lat, 0) / points.length;
+  const cy = points.reduce((s,p) => s + p.lon, 0) / points.length;
+  const d2 = (a, b) => {
+    const dy = (a.lat - b.lat) * 111, dx = (a.lon - b.lon) * 85;
+    return dy*dy + dx*dx;
+  };
+  let startIdx = 0, best = -1;
+  points.forEach((p, i) => { const d = d2(p, {lat:cx, lon:cy}); if(d > best){ best = d; startIdx = i; } });
+  const left = points.slice();
+  const out = [left.splice(startIdx, 1)[0]];
+  while(left.length){
+    let bi = 0, bd = Infinity;
+    left.forEach((p, i) => { const d = d2(p, out[out.length-1]); if(d < bd){ bd = d; bi = i; } });
+    out.push(left.splice(bi, 1)[0]);
+  }
+  return out;
+}
+
+function dedupeAdjacent(names){
+  return names.filter((n, i) => i === 0 || n !== names[i-1]);
+}
+
+function titleCase(s){
+  return s.toLowerCase().replace(/\b([a-z])/g, (m,c) => c.toUpperCase())
+          .replace(/\bAv\b/g,"Av").replace(/\bSt\b/g,"St");
+}
+
+async function loadStops(mode, code){
+  const key = mode + ":" + code;
+  if(S.stops[key]) return S.stops[key];
+  S.stops[key] = { status: "loading" };
+  render(false);
+  try{
+    if(mode === "train"){
+      const rows = S.subway.stations.filter(st =>
+        (st.daytime_routes || "").split(/\s+/).includes(code));
+      const pts = orderGeographically(rows.map(st => ({
+        name: st.stop_name, id: st.gtfs_stop_id,
+        lat: +st.gtfs_latitude, lon: +st.gtfs_longitude
+      })));
+      // MTA names the trunk line per station; take the one most stations agree on.
+      const tally = {};
+      rows.forEach(st => { const l = (st.line || "").trim(); if(l) tally[l] = (tally[l] || 0) + 1; });
+      const lineName = Object.keys(tally).sort((a,b) => tally[b] - tally[a])[0] || "";
+      S.stops[key] = {
+        status: "ready",
+        lineName,
+        dirs: [{ label: null, stops: pts.map(p => p.name), ids: pts.map(p => p.id) }]
+      };
+    } else {
+      const route = S.bus.routes.find(r => r.code === code);
+      const rows = await getJSON(SRC.busStops(route ? route.id : code));
+
+      // A bus route's two direction_id groups are the same corridor travelled
+      // opposite ways. orderGeographically() only knows geometry, so it would
+      // chain both the same way and the two tabs would claim the same
+      // destination. So: chain direction 0, then orient direction 1 against it
+      // by whichever end of its own chain is nearer direction 0's LAST stop.
+      const chains = {};
+      ["0","1"].forEach(d => {
+        const inDir = rows.filter(r => (r.direction_id || "0") === d);
+        if(!inDir.length) return;
+        chains[d] = orderGeographically(inDir.map(r => ({
+          name: titleCase(r.stop_name || ""), id: r.stop_id,
+          lat: +r.latitude, lon: +r.longitude
+        })));
+      });
+
+      const near = (a, b) => {
+        const dy = (a.lat - b.lat) * 111, dx = (a.lon - b.lon) * 85;
+        return dy*dy + dx*dx;
+      };
+      if(chains["0"] && chains["1"]){
+        const out0 = chains["0"][chains["0"].length - 1];
+        const c1 = chains["1"];
+        // direction 1 should START where direction 0 ENDS
+        if(near(c1[c1.length - 1], out0) < near(c1[0], out0)) c1.reverse();
+      }
+
+      const dirs = [];
+      ["0","1"].forEach(d => {
+        const pts = chains[d];
+        if(!pts) return;
+        dirs.push({
+          label: pts.length ? pts[pts.length-1].name : "Direction " + d,
+          stops: dedupeAdjacent(pts.map(p => p.name)),
+          ids: pts.map(p => p.id)
+        });
+      });
+      S.stops[key] = dirs.length ? { status: "ready", dirs } : { status: "failed", error: "No stops published" };
+    }
+  }catch(e){
+    S.stops[key] = { status: "failed", error: e.message };
+  }
+  render(false);
+  return S.stops[key];
+}
+
+/* ============================================================
+   NAV STATE
+   ============================================================ */
+let stack = [{screen:"home"}];
+let dirIndex = 0;
+
+function nav(screen, params){
+  if(screen === "detail"){ PG_OFFSET.stops = 0; PG_OFFSET.alert = 0; dirIndex = 0; }
+  if(screen === "trainList" || screen === "busRouteList") PG_OFFSET.chips = 0;
+  stack.push({screen, params});
+  render(true);
+  if(screen === "trainList") loadSubwayCatalogue();
+  if(screen === "boroughList") loadBusCatalogue();
+  if(screen === "detail") loadStops(params.mode, params.code);
+}
+function goBack(){ if(stack.length > 1){ stack.pop(); render(true); } }
+function goHome(){ stack = [{screen:"home"}]; render(true); }
+function setDir(i){ dirIndex = i; PG_OFFSET.stops = 0; render(false); }
+
+/* ============================================================
+   RENDER
+   ============================================================ */
+function render(withFlash){
+  const cur = stack[stack.length-1];
+  const topbar = document.getElementById("topbar");
+  const content = document.getElementById("content");
+
+  if(cur.screen === "home"){
+    topbar.innerHTML = `<div class="topbar-home"><span class="wordmark-sm">Transit</span></div>`;
+  } else {
+    topbar.innerHTML = `
+      <button class="nav-btn" onclick="goBack()" aria-label="Back">${CHEV_LEFT}</button>
+      <div class="topbar-title">${titleFor(cur)}</div>
+      <button class="nav-btn" onclick="goHome()" aria-label="Home">&#8962;</button>`;
+  }
+
+  content.innerHTML = screenHTML(cur);
+  requestAnimationFrame(() => requestAnimationFrame(pgApplyVisible));
+
+  if(withFlash){
+    content.classList.remove("flash");
+    void content.offsetWidth;
+    content.classList.add("flash");
+  }
+}
+
+function titleFor(cur){
+  if(cur.screen === "trainList") return "Select train";
+  if(cur.screen === "boroughList") return "Select borough";
+  if(cur.screen === "busRouteList") return cur.params.borough;
+  if(cur.screen === "detail") return cur.params.code;
+  return "";
+}
+
+function screenHTML(cur){
+  if(cur.screen === "home") return homeHTML();
+  if(cur.screen === "trainList") return trainListHTML();
+  if(cur.screen === "boroughList") return boroughListHTML();
+  if(cur.screen === "busRouteList") return busRouteListHTML(cur.params.borough);
+  if(cur.screen === "detail") return detailHTML(cur.params.mode, cur.params.code);
+  return "";
+}
+
+function statusHTML(text){ return `<p class="status-line">${text}</p>`; }
+function failHTML(msg, retry){
+  return `<p class="status-line">Couldn't reach MTA: ${msg}</p>
+    <button class="list-btn" onclick="${retry}"><span>Try again</span>${CHEV_RIGHT}</button>`;
+}
+
+/* ============================================================
+   DISCRETE PAGING
+
+   One mechanism for every scrolling region: the stop diagram, the route grid,
+   and the open alert card. Content is translated by whole units — stop rows,
+   chip rows, text lines — so every element lands on the same pixels after a
+   page turn and the panel never has to redraw a partially-shifted row. Each
+   region gets MMD's scrollbar: chevrons page, the track seeks, and the chevron
+   swaps to its dotted variant at either end.
+   ============================================================ */
+const PG = {
+  stops: {
+    vp: "stopline-viewport", inner: "stopline",
+    unit: inner => { const r = inner.querySelector(".stop-row"); return r ? r.offsetHeight : 44; },
+    total: inner => inner.children.length,
+    step: visible => Math.min(5, visible)
+  },
+  chips: {
+    vp: "chip-grid-viewport", inner: "chip-grid",
+    unit: inner => {
+      const r = inner.querySelector(".chip-row");
+      const gap = parseFloat(getComputedStyle(inner).rowGap) || 8;
+      return r ? r.offsetHeight + gap : 60;
+    },
+    total: inner => inner.children.length,
+    step: visible => visible
+  },
+  alert: {
+    vp: "alert-viewport", inner: "alert-inner",
+    unit: inner => parseFloat(getComputedStyle(inner).lineHeight) || 22,
+    total: (inner, unit) => Math.max(1, Math.round(inner.scrollHeight / unit)),
+    // A page turn keeps two lines of context, so a sentence split across the
+    // boundary is still readable: 12 visible lines advance by 10.
+    step: visible => Math.max(1, visible - 2)
+  }
+};
+
+const PG_OFFSET = { stops: 0, chips: 0, alert: 0 };
+
+function pgMetrics(name){
+  const cfg = PG[name];
+  if(!cfg) return null;
+  const vp = document.getElementById(cfg.vp);
+  const inner = document.getElementById(cfg.inner);
+  if(!vp || !inner) return null;
+  const unit = cfg.unit(inner);
+  const total = cfg.total(inner, unit);
+  if(!unit || !total) return null;
+  const visible = Math.max(1, Math.floor(vp.clientHeight / unit));
+  const step = Math.max(1, Math.min(cfg.step(visible), visible));
+  const maxOffset = Math.max(0, total - visible);
+  return { vp, inner, unit, total, visible, step, maxOffset };
+}
+
+function pgApply(name){
+  const m = pgMetrics(name);
+  if(!m) return;
+  const off = PG_OFFSET[name] = Math.min(Math.max(0, PG_OFFSET[name]), m.maxOffset);
+  m.inner.style.transform = "translateY(" + (-off * m.unit) + "px)";
+
+  const track = document.getElementById("track-" + name);
+  const thumb = document.getElementById("thumb-" + name);
+  if(track && thumb){
+    const th = Math.max(18, track.clientHeight * Math.min(1, m.visible / m.total));
+    thumb.style.height = th + "px";
+    thumb.style.top = ((track.clientHeight - th) * (m.maxOffset ? off / m.maxOffset : 0)) + "px";
+  }
+  const up = document.getElementById("chev-up-" + name);
+  const down = document.getElementById("chev-down-" + name);
+  if(up) up.innerHTML = off === 0 ? CHEV.dottedUp : CHEV.filledUp;
+  if(down) down.innerHTML = off >= m.maxOffset ? CHEV.dottedDown : CHEV.filledDown;
+}
+
+function pgPage(name, dir){
+  const m = pgMetrics(name);
+  if(!m) return;
+  const next = Math.min(Math.max(0, PG_OFFSET[name] + dir * m.step), m.maxOffset);
+  if(next === PG_OFFSET[name]) return;
+  PG_OFFSET[name] = next;
+  pgApply(name);
+}
+
+function pgSeek(name, e){
+  const m = pgMetrics(name);
+  if(!m) return;
+  const r = document.getElementById("track-" + name).getBoundingClientRect();
+  const frac = Math.min(1, Math.max(0, (e.clientY - r.top) / r.height));
+  PG_OFFSET[name] = Math.min(Math.round(frac * m.maxOffset / m.step) * m.step, m.maxOffset);
+  pgApply(name);
+}
+
+/** The region the user is looking at: an open alert card owns the screen. */
+function activePager(){
+  const wrap = document.getElementById("notif-wrap");
+  if(wrap && wrap.classList.contains("open") && document.getElementById("alert-viewport")) return "alert";
+  if(document.getElementById("stopline")) return "stops";
+  if(document.getElementById("chip-grid")) return "chips";
+  return null;
+}
+
+function pgApplyVisible(){
+  ["stops","chips","alert"].forEach(n => { if(document.getElementById(PG[n].inner)) pgApply(n); });
+}
+
+function railHTML(name, what){
+  return `<div class="scrollrail">
+      <button class="scrollchev" id="chev-up-${name}" onclick="pgPage('${name}',-1)" aria-label="Previous ${what}">${CHEV.dottedUp}</button>
+      <div class="scrolltrack" id="track-${name}" onclick="pgSeek('${name}',event)"><div class="scrollthumb" id="thumb-${name}"></div></div>
+      <button class="scrollchev" id="chev-down-${name}" onclick="pgPage('${name}',1)" aria-label="Next ${what}">${CHEV.filledDown}</button>
+    </div>`;
+}
+
+/* ---- home ---- */
+function homeHTML(){
+  return `
+    <div class="list-stack">
+      <div class="home-head">
+        <h1 class="wordmark">Transit</h1>
+        <p class="tagline">Live NYC subway &amp; bus status</p>
+      </div>
+      <button class="list-btn" onclick="nav('trainList')">
+        <span><span class="row-label">TRAIN</span><span class="row-sub">All subway lines</span></span>${CHEV_RIGHT}</button>
+      <button class="list-btn" onclick="nav('boroughList')">
+        <span><span class="row-label">BUS</span><span class="row-sub">All routes, by borough</span></span>${CHEV_RIGHT}</button>
+    </div>
+  `;
+}
+
+/* ---- chip rows: two fixed widths, explicit fixed-pitch rows ---- */
+function isWideCode(code){ return code.length > 4; }
+
+function chipRowsHTML(items, shape){
+  const rows = [];
+  const narrow = items.filter(it => shape === "circle" || !isWideCode(it.code));
+  const wide = shape === "circle" ? [] : items.filter(it => isWideCode(it.code));
+  const push = (list, perRow, cls) => {
+    for(let i = 0; i < list.length; i += perRow){
+      rows.push(`<div class="chip-row">` + list.slice(i, i + perRow).map(it =>
+        `<button class="chip ${cls}" onclick="${it.onclick}">${it.code}</button>`).join("") + `</div>`);
+    }
+  };
+  push(narrow, 4, shape === "circle" ? "circle" : "rect");
+  push(wide, 2, "rect wide");
+  return rows.join("");
+}
+
+function chipGridHTML(items, shape){
+  return `<div class="chip-grid-wrap">
+      <div class="chip-grid-viewport" id="chip-grid-viewport">
+        <div class="chip-grid" id="chip-grid">${chipRowsHTML(items, shape)}</div>
+      </div>
+      ${railHTML("chips", "routes")}
+    </div>`;
+}
+
+/* ---- subway line list ---- */
+function trainListHTML(){
+  const label = `<div class="section-label">Subway lines</div>`;
+  if(S.subway.status === "loading") return label + statusHTML("Loading lines from MTA…");
+  if(S.subway.status === "failed") return label + failHTML(S.error.subway, "loadSubwayCatalogue()");
+  const items = S.subway.routes.map(code => ({
+    code, onclick: `nav('detail',{mode:'train',code:'${code}'})`
+  }));
+  return label + chipGridHTML(items, "circle") +
+    `<div class="source-line">${S.subway.routes.length} lines &middot; live from MTA open data</div>`;
+}
+
+/* ---- borough list ---- */
+function boroughListHTML(){
+  if(S.bus.status === "loading") return statusHTML("Loading every bus route from MTA…");
+  if(S.bus.status === "failed") return failHTML(S.error.bus, "loadBusCatalogue()");
+  const rows = BOROUGH_ORDER.map(b => {
+    const n = (S.bus.byBorough[b] || []).length;
+    if(!n) return "";
+    return `<button class="list-btn" onclick="nav('busRouteList',{borough:'${b}'})">
+      <span><span class="row-label">${b}</span><span class="row-sub">${n} routes</span></span>${CHEV_RIGHT}</button>`;
+  }).join("");
+  return `<div class="list-stack">${rows}</div>`;
+}
+
+/* ---- bus route list ---- */
+function busRouteListHTML(borough){
+  const routes = S.bus.byBorough[borough] || [];
+  const items = routes.map(r => ({
+    code: r.code, onclick: `nav('detail',{mode:'bus',code:'${r.code}'})`
+  }));
+  return `<div class="section-label">${borough} routes</div>` + chipGridHTML(items, "rect") +
+    `<div class="source-line">${routes.length} routes</div>`;
+}
+
+/* ---- detail ---- */
+function detailHTML(mode, code){
+  const entry = S.stops[mode + ":" + code];
+  const alerts = alertsFor(mode, code);
+  const hasAlerts = alerts.length > 0;
+
+  const meta = mode === "bus"
+    ? (S.bus.routes.find(r => r.code === code) || {}).name || code
+    : (entry && entry.lineName) || "Subway";
+
+  const dirs = entry && entry.dirs || [];
+  const dir = dirs[Math.min(dirIndex, dirs.length - 1)] || null;
+
+  const affected = new Set();
+  if(dir){
+    const ids = new Set();
+    alerts.forEach(a => a.stopIds.forEach(id => ids.add(id)));
+    dir.ids.forEach((id, i) => {
+      if(ids.has(id) || [...ids].some(x => x.replace(/[NS]$/, "") === id)) affected.add(dir.stops[i]);
+    });
+  }
+
+  // Same shape, same size, same x and y as the chip that was tapped on the
+  // previous screen, so the panel keeps the glyph and redraws only around it.
+  const badgeCls = mode === "train" ? "circle" : (isWideCode(code) ? "rect wide" : "rect");
+  const badge = `<div class="badge ${badgeCls}">${code}</div>`;
+
+  const toggleLabel = hasAlerts
+    ? `${alerts.length} active alert${alerts.length > 1 ? "s" : ""}`
+    : "Good service";
+  const alertsBody = hasAlerts
+    ? alerts.map(a => `<div class="alert-item">
+        <div class="alert-type">${a.type}</div>
+        <div class="alert-text">${a.text}</div></div>`).join("")
+    : `<div class="good-text">No active alerts or delays reported for ${code} right now.</div>`;
+
+  const tabs = dirs.length > 1
+    ? `<div class="dir-tabs">` + dirs.map((d, i) =>
+        `<button class="dir-tab ${i === dirIndex ? "on" : ""}" onclick="setDir(${i})">To ${d.label}</button>`).join("") + `</div>`
+    : "";
+
+  let listBlock;
+  if(!entry || entry.status === "loading"){
+    listBlock = statusHTML("Loading stops…");
+  } else if(entry.status === "failed"){
+    listBlock = failHTML(entry.error, "loadStops('" + mode + "','" + code + "')");
+  } else {
+    const stopRows = dir.stops.map((s, i) => {
+      const isTerm = (i === 0 || i === dir.stops.length - 1);
+      const isAff = affected.has(s);
+      const cls = ["dot"];
+      if(isTerm) cls.push("terminus");
+      if(isAff) cls.push("affected");
+      const tag = isTerm ? `<span class="term-tag">${i === 0 ? "start" : "end"}</span>` : "";
+      return `<div class="stop-row">
+        <div class="dot-col"><div class="${cls.join(" ")}"></div></div>
+        <div class="stop-label ${isAff ? "affected" : ""}">${s}${tag}</div>
+      </div>`;
+    }).join("");
+    listBlock = `
+      <div class="legend">&#9679; stop &nbsp; &#9723; start / end &nbsp; &#9675; affected by alert</div>
+      <div class="stopline-wrap">
+        <div class="stopline-viewport" id="stopline-viewport">
+          <div class="stopline" id="stopline">${stopRows}</div>
+        </div>
+        ${railHTML("stops", "stops")}
+      </div>`;
+  }
+
+  return `
+    <div class="section-label">${meta}</div>
+    <div class="badge-row">
+      ${badge}
+      <div class="badge-info">
+        ${dir && dir.stops.length ? `<div class="direction">${dir.stops.length} stops</div>` : ""}
+      </div>
+    </div>
+    ${tabs}
+    <div class="notif-wrap ${hasAlerts ? "has-alert" : ""}" id="notif-wrap">
+      <button class="notif-toggle" onclick="toggleNotif()">
+        <span>${toggleLabel}</span>
+        <span id="notif-chevron">\u25B8</span>
+      </button>
+      <div class="notif-body" id="notif-body">
+        <div class="alert-viewport" id="alert-viewport">
+          <div class="alert-inner" id="alert-inner">${alertsBody}</div>
+        </div>
+        ${railHTML("alert", "lines")}
+      </div>
+    </div>
+    ${listBlock}
+  `;
+}
+
+function toggleNotif(){
+  const wrap = document.getElementById("notif-wrap");
+  const open = wrap.classList.toggle("open");
+  document.getElementById("notif-chevron").innerHTML = open ? "&#9662;" : "&#9656;";
+  PG_OFFSET.alert = 0;
+  requestAnimationFrame(pgApplyVisible);
+}
+
+/* ---- input: wheel, keys and swipe all page the active region ---- */
+let wheelLock = false;
+document.addEventListener("wheel", e => {
+  const name = activePager();
+  if(!name) return;
+  e.preventDefault();
+  if(wheelLock) return;
+  wheelLock = true;
+  setTimeout(() => { wheelLock = false; }, 220);
+  pgPage(name, e.deltaY > 0 ? 1 : -1);
+}, {passive:false});
+
+document.addEventListener("keydown", e => {
+  const name = activePager();
+  if(!name) return;
+  if(e.key === "ArrowDown" || e.key === "PageDown"){ e.preventDefault(); pgPage(name, 1); }
+  if(e.key === "ArrowUp" || e.key === "PageUp"){ e.preventDefault(); pgPage(name, -1); }
+});
+
+let touchY = null;
+document.addEventListener("touchstart", e => { touchY = e.touches[0].clientY; }, {passive:true});
+document.addEventListener("touchend", e => {
+  const name = activePager();
+  if(touchY === null || !name) return;
+  const dy = e.changedTouches[0].clientY - touchY;
+  touchY = null;
+  if(Math.abs(dy) > 24) pgPage(name, dy < 0 ? 1 : -1);
+}, {passive:true});
+
+render(false);
+</script>
+</body>
+</html>
