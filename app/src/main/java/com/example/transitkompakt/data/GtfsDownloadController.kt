@@ -5,7 +5,8 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.getWorkInfosForUniqueWorkFlow
+import androidx.work.WorkQuery
+import androidx.work.getWorkInfosFlow
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.withContext
@@ -41,6 +42,8 @@ class GtfsDownloadController(private val context: Context) {
     }
 
     /** Empty if nothing has ever been enqueued for this unique work name yet. */
-    fun workInfoFlow(): Flow<List<WorkInfo>> =
-        workManager.getWorkInfosForUniqueWorkFlow(SubwayDownloadWorker.UNIQUE_NAME)
+    fun workInfoFlow(): Flow<List<WorkInfo>> {
+        val query = WorkQuery.Builder.fromUniqueWorkNames(listOf(SubwayDownloadWorker.UNIQUE_NAME)).build()
+        return workManager.getWorkInfosFlow(query)
+    }
 }
