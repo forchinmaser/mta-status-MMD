@@ -37,8 +37,12 @@
     --row-gap:8px;
     --chip-h:52px;
     --chip-gap:8px;
-    --chip-w:58px;           /* 2-4 characters: M15, M125, B41 — 4 per row */
-    --chip-w-wide:124px;     /* long codes: Q44-SBS, BxM4C — 2 per row */
+    /* Fitted to the real 284dp grid viewport (360 dp screen, less 2x18 content
+       padding, less the 40dp scroll rail). Every row fills it exactly:
+       narrow 4 x 65 + 3 x 8 = 284, wide 2 x 138 + 8 = 284, bullets 4 x 65 + 24. */
+    --chip-w:65px;           /* 2-4 characters: M15, M125, B41 — 4 per row */
+    --chip-w-wide:138px;     /* long codes: Q44-SBS, BxM4C — 2 per row */
+    --chip-circle:65px;      /* subway bullets — round, so width = diameter */
     --line-h:22px;           /* alert text line grid */
 
     --border-w:2px;          /* OutlinedButtonMMD / chip border */
@@ -66,17 +70,22 @@
 
   /* ---------- device frame ---------- */
   .device-wrap{display:flex;flex-direction:column;align-items:center;gap:14px;}
+  /* Mudita Kompakt: a 480x800 panel at density 213dpi (factor 1.33), so Compose
+     lays out in 360x600 dp. That dp space is the SCREEN, not the outer shell —
+     the device has no bezel inside its layout area — so .screen is pinned to
+     360x600 and the frame grows by the bezel around it. One CSS px here is one dp
+     in the app. Confirmed on device with: adb shell wm density */
   .device{
-    width:360px;
-    height:600px;
+    width:388px;
+    height:628px;
     background:var(--ink);
     border-radius:26px;
     padding:14px;
     box-shadow:0 18px 40px rgba(0,0,0,0.28);
   }
   .screen{
-    width:100%;
-    height:100%;
+    width:360px;
+    height:600px;
     background:var(--paper);
     border-radius:8px;
     overflow:hidden;
@@ -84,7 +93,7 @@
     flex-direction:column;
   }
   .caption{
-    max-width:360px;
+    max-width:400px;
     text-align:center;
     font-size:12px;
     line-height:1.5;
@@ -212,6 +221,7 @@
   .chip-grid-viewport{flex:1;overflow:hidden;min-width:0;}
   .chip-grid{display:flex;flex-direction:column;gap:var(--chip-gap);}
   .chip-row{display:flex;gap:var(--chip-gap);height:var(--chip-h);flex:0 0 auto;}
+  .chip-row.circles{height:var(--chip-circle);}
   .chip{
     border:var(--border-w) solid var(--ink);
     background:var(--paper);
@@ -229,7 +239,7 @@
     align-items:center;
     justify-content:center;
   }
-  .chip.circle{border-radius:50%;width:var(--chip-h);padding:0;}
+  .chip.circle{border-radius:50%;width:var(--chip-circle);height:var(--chip-circle);padding:0;}
   .chip.rect{border-radius:var(--radius-btn);}
   .chip.wide{width:var(--chip-w-wide);font-size:var(--label-sm);}
   .chip:active{background:var(--ink);color:var(--paper);}
@@ -252,7 +262,7 @@
     display:flex;align-items:center;justify-content:center;
     flex:0 0 auto;
   }
-  .badge.circle{width:var(--chip-h);height:var(--chip-h);border-radius:50%;}
+  .badge.circle{width:var(--chip-circle);height:var(--chip-circle);border-radius:50%;}
   .badge.rect{width:var(--chip-w);height:var(--chip-h);border-radius:var(--radius-btn);}
   .badge.rect.wide{width:var(--chip-w-wide);font-size:var(--label-sm);}
   .badge-info .name{font-size:var(--title-sm);font-weight:700;}
@@ -336,6 +346,9 @@
   .stopline-viewport{flex:1;overflow:hidden;min-width:0;}
   /* MMD LazyColumnMMD scrollbar: chevron, 8dp rounded track with 1dp border,
      filled thumb, chevron. Chevrons page; long-press jumps to either end. */
+  /* Hide the rail entirely when there is nothing to page: a track and thumb that
+     cannot move are ink spent on a dead control. */
+  .scrollrail.idle{visibility:hidden;}
   .scrollrail{
     flex:0 0 40px;
     box-sizing:border-box;
@@ -854,6 +867,9 @@ function pgApply(name){
   const down = document.getElementById("chev-down-" + name);
   if(up) up.innerHTML = off === 0 ? CHEV.dottedUp : CHEV.filledUp;
   if(down) down.innerHTML = off >= m.maxOffset ? CHEV.dottedDown : CHEV.filledDown;
+
+  const rail = document.getElementById("rail-" + name);
+  if(rail) rail.classList.toggle("idle", m.maxOffset === 0);
 }
 
 function pgPage(name, dir){
@@ -888,7 +904,7 @@ function pgApplyVisible(){
 }
 
 function railHTML(name, what){
-  return `<div class="scrollrail">
+  return `<div class="scrollrail idle" id="rail-${name}">
       <button class="scrollchev" id="chev-up-${name}" onclick="pgPage('${name}',-1)" aria-label="Previous ${what}">${CHEV.dottedUp}</button>
       <div class="scrolltrack" id="track-${name}" onclick="pgSeek('${name}',event)"><div class="scrollthumb" id="thumb-${name}"></div></div>
       <button class="scrollchev" id="chev-down-${name}" onclick="pgPage('${name}',1)" aria-label="Next ${what}">${CHEV.filledDown}</button>
@@ -920,7 +936,7 @@ function chipRowsHTML(items, shape){
   const wide = shape === "circle" ? [] : items.filter(it => isWideCode(it.code));
   const push = (list, perRow, cls) => {
     for(let i = 0; i < list.length; i += perRow){
-      rows.push(`<div class="chip-row">` + list.slice(i, i + perRow).map(it =>
+      rows.push(`<div class="chip-row ${cls === "circle" ? "circles" : ""}">` + list.slice(i, i + perRow).map(it =>
         `<button class="chip ${cls}" onclick="${it.onclick}">${it.code}</button>`).join("") + `</div>`);
     }
   };
