@@ -1,14 +1,15 @@
 package com.example.transitkompakt.data
 
 import android.content.Context
+import androidx.lifecycle.Observer
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkInfo
 import androidx.work.WorkManager
-import androidx.work.WorkQuery
-import androidx.work.getWorkInfosFlow
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -41,9 +42,17 @@ class GtfsDownloadController(private val context: Context) {
         workManager.enqueueUniqueWork(SubwayDownloadWorker.UNIQUE_NAME, ExistingWorkPolicy.KEEP, request)
     }
 
-    /** Empty if nothing has ever been enqueued for this unique work name yet. */
-    fun workInfoFlow(): Flow<List<WorkInfo>> {
-        val query = WorkQuery.Builder.fromUniqueWorkNames(listOf(SubwayDownloadWorker.UNIQUE_NAME)).build()
-        return workManager.getWorkInfosFlow(query)
+    /**
+     * Empty if nothing has ever been enqueued for this unique work name yet.
+     * Bridged off getWorkInfosForUniqueWorkLiveData by hand rather than a
+     * work-runtime-ktx Flow extension — plain LiveData query methods are the
+     * part of this API that's been stable and unchanged since WorkManager
+     * 1.0, which is worth more here than a shorter call I can't verify.
+     */
+    fun workInfoFlow(): Flow<List<WorkInfo>> = callbackFlow {
+        val liveData = workManager.getWorkInfosForUniqueWorkLiveData(SubwayDownloadWorker.UNIQUE_NAME)
+        val observer = Observer<List<WorkInfo>> { infos -> trySend(infos) }
+        liveData.observeForever(observer)
+        awaitClose { liveData.removeObserver(observer) }
     }
 }
