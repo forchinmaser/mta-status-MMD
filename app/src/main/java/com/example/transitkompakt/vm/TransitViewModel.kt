@@ -153,7 +153,7 @@ class TransitViewModel(
         }
         _subway.value = Catalogue.Working("subway", true)
         viewModelScope.launch {
-            repo.loadRouteList(GtfsSources.SUBWAY, Mode.TRAIN, null) { p -> _subway.value = p.toCatalogue() }
+            repo.loadRouteList(GtfsSources.SUBWAY, Mode.TRAIN, null, onProgress = { p -> _subway.value = p.toCatalogue() })
                 .fold(
                     onSuccess = {
                         _subway.value = Catalogue.Ready(it)
@@ -176,7 +176,7 @@ class TransitViewModel(
         busJob?.cancel()
         _bus.value = Catalogue.Working(borough, true)
         busJob = viewModelScope.launch {
-            repo.loadRouteList(url, Mode.BUS, borough) { p -> _bus.value = p.toCatalogue() }
+            repo.loadRouteList(url, Mode.BUS, borough, onProgress = { p -> _bus.value = p.toCatalogue() })
                 .fold(
                     onSuccess = {
                         _bus.value = Catalogue.Ready(it)
