@@ -13,15 +13,29 @@ import androidx.compose.ui.unit.dp
  *    exactly where the third and fourth borough rows land.
  *  - Two chip widths only, in fixed-pitch rows, so a route chip is in the same
  *    column on every page of every borough.
- *  - The detail badge is the same size as the chip that was tapped, in the same
- *    position, so the glyph survives the navigation.
+ *  - Paged regions are whole multiples of their row pitch, so a page turn always
+ *    repaints a clean rectangle and never leaves a half row of ink.
  */
 object Design {
-    /** Stop rows step in whole pages of this many items. */
-    const val STOPS_PER_PAGE = 5
+    /**
+     * Stop rows step in whole pages of this many items.
+     *
+     * GHOSTING CONSTANT — was 5. The detail screen no longer draws the route-name
+     * label or the filled route badge (both moved into the top bar as
+     * "6 · Lexington Av Local"), which frees 64dp + 36dp. With the 54dp alert
+     * card closed, 349dp remain for the diagram: seven whole 44dp rows.
+     */
+    const val STOPS_PER_PAGE = 7
 
-    /** A text page turn keeps this many lines of context. */
+    /** A text page turn keeps this many lines of context. Unchanged. */
     const val ALERT_LINE_OVERLAP = 2
+
+    /**
+     * Chips invert for this long as a route grid first paints, and again on each
+     * page turn, to clear ghosting left by the previous grid. Not a pitch — safe
+     * to tune. 0 disables the flash.
+     */
+    const val CHIP_FLASH_MS = 100L
 
     val ScreenPadding = 16.dp
     val Gap = 12.dp

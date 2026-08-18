@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
@@ -141,6 +140,21 @@ fun BoroughListScreen(
     }
 }
 
+/**
+ * Route detail.
+ *
+ * The route's identity — code and line name — is carried by the top bar
+ * ("6 · Lexington Av Local"), set in TransitApp. The screen therefore opens
+ * straight onto the direction toggle: no section label, no filled badge, no stop
+ * count. That returns 100dp to the content column, which is why the diagram now
+ * pages seven stops (Design.STOPS_PER_PAGE) instead of five and the open alert
+ * card holds sixteen lines instead of twelve.
+ *
+ * Trade-off worth knowing: the badge used to sit on exactly the pixels the tapped
+ * chip occupied, so that boundary never repainted. It no longer exists, so the
+ * chip → detail transition now repaints that region. The route code survives the
+ * navigation in the top bar instead.
+ */
 @Composable
 fun RouteDetailScreen(
     route: Route,
@@ -160,15 +174,6 @@ fun RouteDetailScreen(
         modifier = Modifier.fillMaxSize().padding(Design.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(Design.Gap)
     ) {
-        // Label first, then the badge — so the badge sits on exactly the pixels
-        // the tapped chip occupied on the previous screen.
-        SectionLabel(route.name)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            LineChipFilled(route.code, circle = route.transitMode == Mode.TRAIN)
-            Spacer(Modifier.width(Design.Gap))
-            TextMMD("${route.stops.size} stops", style = MaterialTheme.typography.bodySmall)
-        }
-
         if (siblings.size > 1) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 siblings.forEach { alt ->

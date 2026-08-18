@@ -47,6 +47,9 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) = TextMMD(
 @Composable
 fun AppTopBar(title: String, onBack: (() -> Unit)?, onHome: (() -> Unit)?) = TopAppBarMMD(
     title = {
+        // On the detail screen this carries "6 · Lexington Av Local": the route
+        // identity lives here now instead of a label plus a badge in the content
+        // column, which is what freed the diagram two extra stop rows.
         TextMMD(
             text = title,
             style = MaterialTheme.typography.titleMedium,
@@ -109,30 +112,33 @@ private fun chipModifier(code: String, circle: Boolean): Modifier = when {
     else -> Modifier.width(Design.ChipWidth).height(Design.ChipHeight)
 }
 
-/** Subway bullet (circle) or bus route plate (rounded), in one of two fixed widths. */
-@Composable
-fun LineChip(code: String, circle: Boolean, onClick: () -> Unit) =
-    OutlinedButtonMMD(
-        onClick = onClick,
-        shape = chipShape(circle),
-        modifier = chipModifier(code, circle)
-    ) {
-        Box(contentAlignment = Alignment.Center) { ChipLabel(code, circle) }
-    }
-
 /**
- * Filled variant for the current route on the detail header — same shape, size
- * and position as the chip that was tapped on the previous screen.
+ * Subway bullet (circle) or bus route plate (rounded), in one of two fixed widths.
+ *
+ * [inverted] draws the same chip filled instead of outlined — same shape, same
+ * size, same position, only the ink swapped. ChipGrid holds every chip inverted
+ * for Design.CHIP_FLASH_MS as a grid page first paints, so the panel clears the
+ * previous page's ghost before settling.
  */
 @Composable
-fun LineChipFilled(code: String, circle: Boolean) =
-    ButtonMMD(
-        onClick = {},
-        shape = chipShape(circle),
-        modifier = chipModifier(code, circle)
-    ) {
-        ChipLabel(code, circle)
+fun LineChip(
+    code: String,
+    circle: Boolean,
+    inverted: Boolean = false,
+    onClick: () -> Unit
+) {
+    val shape = chipShape(circle)
+    val modifier = chipModifier(code, circle)
+    if (inverted) {
+        ButtonMMD(onClick = onClick, shape = shape, modifier = modifier) {
+            Box(contentAlignment = Alignment.Center) { ChipLabel(code, circle) }
+        }
+    } else {
+        OutlinedButtonMMD(onClick = onClick, shape = shape, modifier = modifier) {
+            Box(contentAlignment = Alignment.Center) { ChipLabel(code, circle) }
+        }
     }
+}
 
 @Composable
 private fun ChipLabel(code: String, circle: Boolean) = TextMMD(

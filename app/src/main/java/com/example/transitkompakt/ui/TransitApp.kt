@@ -59,6 +59,7 @@ fun TransitApp(vm: TransitViewModel) {
 
     // Hardware keys page whichever region is on screen. Step matches that region:
     // whole stop pages, a text page less two lines of context, a full grid page.
+    // The alert region is sixteen lines tall now, so its step is fourteen.
     DisposableEffect(active, alertsOpen, current) {
         HardwareKeys.onPage = if (active == null) null else { dir ->
             scope.launch {
@@ -91,7 +92,12 @@ fun TransitApp(vm: TransitViewModel) {
                     Screen.TrainList -> "Select train"
                     Screen.BoroughList -> "Select borough"
                     is Screen.BusRoutes -> current.borough
-                    is Screen.Detail -> vm.route(current.routeId)?.code ?: ""
+                    // Code and line name together: the detail screen's content
+                    // column no longer carries either, which is what freed the
+                    // diagram two extra stop rows.
+                    is Screen.Detail -> vm.route(current.routeId)?.let { r ->
+                        if (r.name.isBlank()) r.code else "${r.code} · ${r.name}"
+                    } ?: ""
                     Screen.Home -> ""
                 },
                 onBack = ::back,

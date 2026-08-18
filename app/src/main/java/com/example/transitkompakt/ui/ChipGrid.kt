@@ -5,9 +5,14 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.mudita.mmd.components.lazy.LazyColumnMMD
+import kotlinx.coroutines.delay
 
 /**
  * Route grid.
@@ -17,6 +22,11 @@ import com.mudita.mmd.components.lazy.LazyColumnMMD
  * explicitly at a fixed pitch, and chips come in two fixed widths only — narrow
  * codes four per row, long/SBS codes two per row — so a chip boundary is in the
  * same column on every page of every borough and the panel redraws less.
+ *
+ * Ghosting: a grid page replaces a whole screen of chips at once, which is the
+ * worst case for imprint. Every chip is drawn filled for Design.CHIP_FLASH_MS as
+ * a page first paints, then returns to outlined — one deliberate inversion in
+ * place of a slow fade of the old page.
  */
 @Composable
 fun ChipGrid(
@@ -27,6 +37,18 @@ fun ChipGrid(
     onPick: (String) -> Unit
 ) {
     val rows = remember(codes, circle) { chipRows(codes, circle) }
+
+    // Re-fires on arrival at the screen and on every page turn.
+    val pageKey = state.firstVisibleItemIndex
+    var flashing by remember { mutableStateOf(Design.CHIP_FLASH_MS > 0L) }
+    LaunchedEffect(codes, pageKey) {
+        if (Design.CHIP_FLASH_MS > 0L) {
+            flashing = true
+            delay(Design.CHIP_FLASH_MS)
+            flashing = false
+        }
+    }
+
     LazyColumnMMD(
         modifier = modifier,
         state = state,
@@ -37,7 +59,9 @@ fun ChipGrid(
     ) {
         items(rows.size) { r ->
             Row(horizontalArrangement = Arrangement.spacedBy(Design.ChipGap)) {
-                rows[r].forEach { code -> LineChip(code, circle) { onPick(code) } }
+                rows[r].forEach { code ->
+                    LineChip(code = code, circle = circle, inverted = flashing) { onPick(code) }
+                }
             }
         }
     }
