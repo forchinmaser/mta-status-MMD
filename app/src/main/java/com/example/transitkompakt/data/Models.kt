@@ -13,7 +13,23 @@ data class Route(
     val name: String,
     val direction: String,
     val borough: String? = null,
-    val stops: List<String>
+    val stops: List<String>,
+    /** Same order/length as [stops]; the GTFS stop_id behind each display name. */
+    val stopIds: List<String> = emptyList()
+) {
+    val transitMode: Mode get() = if (mode == "train") Mode.TRAIN else Mode.BUS
+}
+
+/**
+ * A route's code and name only — what a route grid needs to render. Cheap to
+ * build (routes.txt alone), unlike [Route], which needs the whole feed parsed.
+ */
+data class RouteStub(
+    val id: String,
+    val mode: String,
+    val code: String,
+    val name: String,
+    val borough: String? = null
 ) {
     val transitMode: Mode get() = if (mode == "train") Mode.TRAIN else Mode.BUS
 }
@@ -32,7 +48,12 @@ data class Alert(
     val type: String,
     val text: String,
     val routeCodes: Set<String>,
-    val stopNames: Set<String> = emptySet()
+    /**
+     * MTA's informed_entity.stop_id, verbatim — not a display name. Only
+     * present when MTA gives stop-level granularity; many alerts are
+     * route-wide and carry none, which is correctly "no stop affected".
+     */
+    val stopIds: Set<String> = emptySet()
 )
 
 data class AlertBundle(

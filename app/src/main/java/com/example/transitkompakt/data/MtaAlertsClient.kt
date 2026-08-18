@@ -65,7 +65,7 @@ class MtaAlertsClient {
                 type = mtaAlertType(alert),
                 text = bodyText.ifBlank { header }.trim(),
                 routeCodes = routes,
-                stopNames = stops
+                stopIds = stops
             )
             if (a.text.isBlank()) continue
             routes.forEach { out.getOrPut(it) { mutableListOf() } += a }

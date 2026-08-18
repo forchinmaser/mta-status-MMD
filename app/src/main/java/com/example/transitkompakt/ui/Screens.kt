@@ -21,6 +21,7 @@ import com.example.transitkompakt.data.Alert
 import com.example.transitkompakt.data.Feed
 import com.example.transitkompakt.data.Mode
 import com.example.transitkompakt.data.Route
+import com.example.transitkompakt.data.RouteStub
 import com.example.transitkompakt.data.routeCodeOrder
 import com.example.transitkompakt.vm.Catalogue
 import com.mudita.mmd.components.chips.FilterChipMMD
@@ -57,7 +58,7 @@ fun TrainListScreen(
     catalogue: Catalogue,
     feed: Feed,
     listState: LazyListState,
-    onRoute: (Route) -> Unit,
+    onRoute: (RouteStub) -> Unit,
     onRetry: () -> Unit
 ) = RouteGridScreen("Subway lines", catalogue, true, feed, listState, onRoute, onRetry)
 
@@ -66,7 +67,7 @@ fun BusRouteListScreen(
     borough: String,
     catalogue: Catalogue,
     listState: LazyListState,
-    onRoute: (Route) -> Unit,
+    onRoute: (RouteStub) -> Unit,
     onRetry: () -> Unit
 ) = RouteGridScreen("$borough routes", catalogue, false, null, listState, onRoute, onRetry)
 
@@ -77,7 +78,7 @@ private fun RouteGridScreen(
     circle: Boolean,
     feed: Feed?,
     listState: LazyListState,
-    onRoute: (Route) -> Unit,
+    onRoute: (RouteStub) -> Unit,
     onRetry: () -> Unit
 ) = Column(
     modifier = Modifier.fillMaxSize().padding(Design.ScreenPadding),
@@ -166,8 +167,15 @@ fun RouteDetailScreen(
     onToggleAlerts: () -> Unit,
     onDirection: (Route) -> Unit
 ) {
+    // Match by GTFS stop_id, not display name: MTA's alert feed identifies
+    // affected stops by id (when it gives stop-level detail at all — many
+    // alerts are route-wide with no stop_id, and those correctly mark
+    // nothing here), and route.stopIds carries the same id space in the
+    // same order as route.stops.
     val affected = remember(route.id, alerts) {
-        route.stops.filter { stop -> alerts.any { a -> a.stopNames.any { stop.contains(it, true) } } }.toSet()
+        val affectedIds = alerts.flatMap { it.stopIds }.toSet()
+        if (affectedIds.isEmpty()) return@remember emptySet()
+        route.stops.filterIndexed { i, _ -> route.stopIds.getOrNull(i) in affectedIds }.toSet()
     }
 
     Column(
