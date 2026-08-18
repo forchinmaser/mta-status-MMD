@@ -2,12 +2,15 @@ package com.example.transitkompakt.vm
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.work.WorkInfo
 import com.example.transitkompakt.data.Feed
+import com.example.transitkompakt.data.GtfsDownloadController
 import com.example.transitkompakt.data.GtfsImporter
 import com.example.transitkompakt.data.GtfsSources
 import com.example.transitkompakt.data.Mode
 import com.example.transitkompakt.data.Route
 import com.example.transitkompakt.data.RouteStub
+import com.example.transitkompakt.data.SubwayDownloadWorker
 import com.example.transitkompakt.BuildConfig
 import com.example.transitkompakt.data.TransitRepository
 import kotlinx.coroutines.Job
@@ -15,6 +18,15 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+
+/** First-run subway cache gate — see GtfsGateSheet for the UI it drives. */
+sealed interface GateState {
+    data object Checking : GateState
+    data object Ready : GateState
+    data class Ask(val sizeLabel: String?) : GateState
+    data class Downloading(val fraction: Float) : GateState
+    data class Failed(val reason: String) : GateState
+}
 
 /** What a route list knows about its feed right now. */
 sealed interface Catalogue {
@@ -26,8 +38,9 @@ sealed interface Catalogue {
 
 /**
  * What the currently-open route knows about its own stop diagram(s). Separate
- * from [Catalogue]: opening a route no longer needs the whole borough's stop
- * data, only this one route's, fetched on tap and cached for a while.
+ * from [Catalogue]: opening a route no longer needs the whole feed's stop
+ * data, only this one route's — though a background full-feed pass, fired
+ * right after the route list loads, often has it ready before a tap needs it.
  */
 sealed interface RouteDetail {
     data object Idle : RouteDetail
@@ -36,7 +49,55 @@ sealed interface RouteDetail {
     data class Failed(val code: String, val reason: String) : RouteDetail
 }
 
-class TransitViewModel(private val repo: TransitRepository) : ViewModel() {
+class TransitViewModel(
+    private val repo: TransitRepository,
+    private val downloads: GtfsDownloadController
+) : ViewModel() {
+
+    private val _gate = MutableStateFlow<GateState>(GateState.Checking)
+    val gate: StateFlow<GateState> = _gate.asStateFlow()
+
+    private var gateObserved = false
+
+    /** Called once, up front: decides whether the first-run sheet is needed at all. */
+    fun checkGate() {
+        if (_gate.value !is GateState.Checking) return
+        if (!BuildConfig.USE_LIVE_FEEDS || repo.isSubwayCached()) { _gate.value = GateState.Ready; return }
+        observeDownload()
+        viewModelScope.launch { _gate.value = GateState.Ask(downloads.probeSizeLabel(GtfsSources.SUBWAY)) }
+    }
+
+    fun startDownload() {
+        downloads.enqueue()
+        _gate.value = GateState.Downloading(0f)
+    }
+
+    private fun observeDownload() {
+        if (gateObserved) return
+        gateObserved = true
+        viewModelScope.launch {
+            downloads.workInfoFlow().collect { infos ->
+                val info = infos.firstOrNull() ?: return@collect
+                when (info.state) {
+                    WorkInfo.State.ENQUEUED -> _gate.value = GateState.Downloading(0f)
+                    WorkInfo.State.RUNNING -> {
+                        val fraction = info.progress.getFloat(SubwayDownloadWorker.KEY_FRACTION, 0f)
+                        _gate.value = GateState.Downloading(fraction)
+                    }
+                    WorkInfo.State.SUCCEEDED -> {
+                        repo.refresh(GtfsSources.SUBWAY)
+                        _gate.value = GateState.Ready
+                    }
+                    WorkInfo.State.FAILED -> {
+                        val reason = info.outputData.getString(SubwayDownloadWorker.KEY_ERROR) ?: "Download failed"
+                        _gate.value = GateState.Failed(reason)
+                    }
+                    WorkInfo.State.CANCELLED -> _gate.value = GateState.Failed("Cancelled")
+                    WorkInfo.State.BLOCKED -> Unit
+                }
+            }
+        }
+    }
 
     private val _feed = MutableStateFlow<Feed>(Feed.Idle)
     val feed: StateFlow<Feed> = _feed.asStateFlow()
@@ -63,6 +124,8 @@ class TransitViewModel(private val repo: TransitRepository) : ViewModel() {
     /**
      * TRAIN tap: start the subway route list and the alert feed together, so
      * both are usually in hand before the rider has finished reading the list.
+     * In practice the subway route list is already on disk by the time this
+     * runs, since the first-run sheet fetches it before Home is reachable.
      */
     fun onModeSelected(mode: Mode) {
         prefetchAlerts(mode)
@@ -83,12 +146,19 @@ class TransitViewModel(private val repo: TransitRepository) : ViewModel() {
     fun loadSubway() {
         if (_subway.value is Catalogue.Ready || _subway.value is Catalogue.Working) return
         if (!BuildConfig.USE_LIVE_FEEDS) { seedInto(_subway, Mode.TRAIN, null); return }
-        repo.routeListFor(GtfsSources.SUBWAY)?.let { _subway.value = Catalogue.Ready(it); return }
+        repo.routeListFor(GtfsSources.SUBWAY)?.let { stubs ->
+            _subway.value = Catalogue.Ready(stubs)
+            prefetchAllDetail(GtfsSources.SUBWAY, stubs, Mode.TRAIN, null)
+            return
+        }
         _subway.value = Catalogue.Working("subway", true)
         viewModelScope.launch {
             repo.loadRouteList(GtfsSources.SUBWAY, Mode.TRAIN, null) { p -> _subway.value = p.toCatalogue() }
                 .fold(
-                    onSuccess = { _subway.value = Catalogue.Ready(it) },
+                    onSuccess = {
+                        _subway.value = Catalogue.Ready(it)
+                        prefetchAllDetail(GtfsSources.SUBWAY, it, Mode.TRAIN, null)
+                    },
                     onFailure = { _subway.value = fallback(Mode.TRAIN, it) }
                 )
         }
@@ -98,16 +168,34 @@ class TransitViewModel(private val repo: TransitRepository) : ViewModel() {
     fun loadBorough(borough: String) {
         if (!BuildConfig.USE_LIVE_FEEDS) { seedInto(_bus, Mode.BUS, borough); return }
         val url = GtfsSources.BUS[borough] ?: return
-        repo.routeListFor(url)?.let { _bus.value = Catalogue.Ready(it); return }
+        repo.routeListFor(url)?.let { stubs ->
+            _bus.value = Catalogue.Ready(stubs)
+            prefetchAllDetail(url, stubs, Mode.BUS, borough)
+            return
+        }
         busJob?.cancel()
         _bus.value = Catalogue.Working(borough, true)
         busJob = viewModelScope.launch {
             repo.loadRouteList(url, Mode.BUS, borough) { p -> _bus.value = p.toCatalogue() }
                 .fold(
-                    onSuccess = { _bus.value = Catalogue.Ready(it) },
+                    onSuccess = {
+                        _bus.value = Catalogue.Ready(it)
+                        prefetchAllDetail(url, it, Mode.BUS, borough)
+                    },
                     onFailure = { _bus.value = fallback(Mode.BUS, it, borough) }
                 )
         }
+    }
+
+    /**
+     * Fired right after a feed's route list is in hand: parse every route's
+     * stops in one pass, in the background, so a tap that lands a moment
+     * later usually finds the store already warm instead of triggering its
+     * own scan. A no-op if the store already has the full feed.
+     */
+    private fun prefetchAllDetail(feedUrl: String, stubs: List<RouteStub>, mode: Mode, borough: String?) {
+        if (!BuildConfig.USE_LIVE_FEEDS) return
+        viewModelScope.launch { repo.loadAllRouteDetail(feedUrl, stubs, mode, borough) }
     }
 
     /**

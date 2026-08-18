@@ -52,8 +52,9 @@ fun TransitApp(vm: TransitViewModel) {
     // just changes which of them is selected — no second request.
     var selectedId by remember(current) { mutableStateOf<String?>(null) }
 
-    // Route tap: fetch this route's stop diagram(s). Cheap no-op if the same
-    // stub is already cached or already loading (repo TTL-caches the result).
+    // Route tap: fetch this route's stop diagram(s). Cheap no-op if the store
+    // already has it — permanently, unless app storage is cleared — or a
+    // background full-feed pass already covered it.
     LaunchedEffect(current) {
         if (current is Screen.Detail) vm.openRoute(current.stub)
     }
@@ -98,7 +99,13 @@ fun TransitApp(vm: TransitViewModel) {
 
     fun push(s: Screen) { stack = stack + s }
     fun back() { if (stack.size > 1) stack = stack.dropLast(1) }
-    fun home() { stack = listOf(Screen.Home) }
+
+    // Once loaded, the title follows the shown direction ("A · Far Rockaway-
+    // Mott Av") and the swap control; before that, the stub's line name is
+    // the best available label. No Home action anywhere — back is the only
+    // way out of a screen, all the way to Home.
+    val readyRoutes = (detail as? RouteDetail.Ready)?.routes
+    val shownRoute = readyRoutes?.let { rs -> rs.firstOrNull { it.id == selectedId } ?: rs.first() }
 
     Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.surface)) {
         if (current != Screen.Home) {
@@ -107,18 +114,14 @@ fun TransitApp(vm: TransitViewModel) {
                     Screen.TrainList -> "Select train"
                     Screen.BoroughList -> "Select borough"
                     is Screen.BusRoutes -> current.borough
-                    // Code and line name together: the detail screen's content
-                    // column no longer carries either, which is what freed the
-                    // diagram two extra stop rows. Known from the tapped chip,
-                    // so the title is correct immediately, before the stop
-                    // diagram itself has finished loading.
-                    is Screen.Detail -> current.stub.let { s ->
-                        if (s.name.isBlank()) s.code else "${s.code} · ${s.name}"
+                    is Screen.Detail -> when {
+                        shownRoute != null -> "${shownRoute.code} · ${shownRoute.direction.removePrefix("To ")}"
+                        current.stub.name.isBlank() -> current.stub.code
+                        else -> "${current.stub.code} · ${current.stub.name}"
                     }
                     Screen.Home -> ""
                 },
-                onBack = ::back,
-                onHome = ::home
+                onBack = ::back
             )
         }
 
@@ -157,16 +160,17 @@ fun TransitApp(vm: TransitViewModel) {
 
             is Screen.Detail -> when (val d = detail) {
                 is RouteDetail.Ready -> {
-                    val route = d.routes.firstOrNull { it.id == selectedId } ?: d.routes.first()
+                    val route = shownRoute ?: d.routes.first()
                     RouteDetailScreen(
                         route = route,
-                        siblings = d.routes,
+                        hasAlternate = d.routes.size > 1,
+                        reversed = d.routes.size > 1 && route.id != d.routes.first().id,
                         alerts = vm.alerts(route),
                         alertsOpen = alertsOpen,
                         stopState = stopState,
                         alertState = alertState,
                         onToggleAlerts = { alertsOpen = !alertsOpen },
-                        onDirection = { selectedId = it.id }
+                        onSwap = { d.routes.firstOrNull { it.id != route.id }?.let { selectedId = it.id } }
                     )
                 }
 

@@ -13,7 +13,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -44,12 +43,14 @@ fun SectionLabel(text: String, modifier: Modifier = Modifier) = TextMMD(
     modifier = modifier.fillMaxWidth().height(24.dp)
 )
 
+/** The back arrow is the only navigation the top bar carries — no Home action. */
 @Composable
-fun AppTopBar(title: String, onBack: (() -> Unit)?, onHome: (() -> Unit)?) = TopAppBarMMD(
+fun AppTopBar(title: String, onBack: (() -> Unit)?) = TopAppBarMMD(
     title = {
-        // On the detail screen this carries "6 · Lexington Av Local": the route
-        // identity lives here now instead of a label plus a badge in the content
-        // column, which is what freed the diagram two extra stop rows.
+        // On the detail screen this carries "A · Far Rockaway-Mott Av": the
+        // route identity and shown direction live here now instead of a
+        // label plus a badge plus direction chips in the content column,
+        // which is what freed the diagram those rows back.
         TextMMD(
             text = title,
             style = MaterialTheme.typography.titleMedium,
@@ -61,19 +62,6 @@ fun AppTopBar(title: String, onBack: (() -> Unit)?, onHome: (() -> Unit)?) = Top
         if (onBack != null) {
             IconButton(onClick = onBack) {
                 Icon(painterResource(R.drawable.chevron_filled_left), contentDescription = "Back")
-            }
-        }
-    },
-    actions = {
-        if (onHome != null) {
-            // MMD ships no home icon, and borrowing a scrollbar chevron would read as
-            // a scroll hint — so the action is a plain MMD text label.
-            TextButton(onClick = onHome) {
-                TextMMD(
-                    text = "Home",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
             }
         }
     }

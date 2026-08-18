@@ -24,6 +24,7 @@ data class Route(
  * A route's code and name only — what a route grid needs to render. Cheap to
  * build (routes.txt alone), unlike [Route], which needs the whole feed parsed.
  */
+@Serializable
 data class RouteStub(
     val id: String,
     val mode: String,

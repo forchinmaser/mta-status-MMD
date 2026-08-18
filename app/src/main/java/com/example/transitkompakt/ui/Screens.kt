@@ -8,12 +8,16 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -24,7 +28,7 @@ import com.example.transitkompakt.data.Route
 import com.example.transitkompakt.data.RouteStub
 import com.example.transitkompakt.data.routeCodeOrder
 import com.example.transitkompakt.vm.Catalogue
-import com.mudita.mmd.components.chips.FilterChipMMD
+import com.mudita.mmd.R
 import com.mudita.mmd.components.text.TextMMD
 
 /**
@@ -144,28 +148,26 @@ fun BoroughListScreen(
 /**
  * Route detail.
  *
- * The route's identity — code and line name — is carried by the top bar
- * ("6 · Lexington Av Local"), set in TransitApp. The screen therefore opens
- * straight onto the direction toggle: no section label, no filled badge, no stop
- * count. That returns 100dp to the content column, which is why the diagram now
- * pages seven stops (Design.STOPS_PER_PAGE) instead of five and the open alert
- * card holds sixteen lines instead of twelve.
- *
- * Trade-off worth knowing: the badge used to sit on exactly the pixels the tapped
- * chip occupied, so that boundary never repainted. It no longer exists, so the
- * chip → detail transition now repaints that region. The route code survives the
- * navigation in the top bar instead.
+ * The route's identity — code and, once loaded, the shown direction's end
+ * stop — is carried entirely by the top bar ("A · Far Rockaway-Mott Av"), set
+ * in TransitApp. Nothing above the alert card: no section label, no badge, no
+ * stop count, no direction chips. What used to be a direction-picker row is
+ * now [DirectionSwap], a single control on the legend line, at the same x as
+ * the stop diagram's spine — swapping which of the (at most two) directions
+ * is drawn, rather than choosing from a list, since GTFS direction_id only
+ * ever gives two.
  */
 @Composable
 fun RouteDetailScreen(
     route: Route,
-    siblings: List<Route>,
+    hasAlternate: Boolean,
+    reversed: Boolean,
     alerts: List<Alert>,
     alertsOpen: Boolean,
     stopState: LazyListState,
     alertState: LazyListState,
     onToggleAlerts: () -> Unit,
-    onDirection: (Route) -> Unit
+    onSwap: () -> Unit
 ) {
     // Match by GTFS stop_id, not display name: MTA's alert feed identifies
     // affected stops by id (when it gives stop-level detail at all — many
@@ -182,24 +184,6 @@ fun RouteDetailScreen(
         modifier = Modifier.fillMaxSize().padding(Design.ScreenPadding),
         verticalArrangement = Arrangement.spacedBy(Design.Gap)
     ) {
-        if (siblings.size > 1) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                siblings.forEach { alt ->
-                    FilterChipMMD(
-                        selected = alt.id == route.id,
-                        onClick = { onDirection(alt) },
-                        label = {
-                            TextMMD(
-                                text = alt.direction.removePrefix("To ").take(18),
-                                style = MaterialTheme.typography.labelSmall,
-                                maxLines = 1
-                            )
-                        }
-                    )
-                }
-            }
-        }
-
         AlertCard(
             alerts = alerts,
             code = route.code,
@@ -211,18 +195,42 @@ fun RouteDetailScreen(
 
         // Open, the alert card owns the screen and the diagram is not drawn at all.
         if (!alertsOpen) {
-            TextMMD(
-                text = "● stop   ▢ start / end   ○ affected by alert",
-                style = MaterialTheme.typography.labelSmall,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
+            Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                // Same 30dp column StopList reserves for its spine, so the swap
+                // control (or its empty stand-in) lines up with it exactly.
+                if (hasAlternate) DirectionSwap(reversed = reversed, onClick = onSwap)
+                else Spacer(Modifier.size(30.dp))
+                TextMMD(
+                    text = "● stop   ▢ start / end   ○ affected by alert",
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f)
+                )
+            }
             StopList(
                 stops = route.stops,
                 affected = affected,
                 state = stopState,
                 modifier = Modifier.fillMaxWidth().weight(1f)
             )
+        }
+    }
+}
+
+/**
+ * Flips which of the two GTFS directions the diagram draws. Filled chevrons
+ * in the default direction, dotted (MMD's own "alternate state" idiom,
+ * already used for end-of-list chevrons) when reversed — there is no
+ * dedicated swap glyph in mmd-core to draw on instead.
+ */
+@Composable
+private fun DirectionSwap(reversed: Boolean, onClick: () -> Unit) {
+    val up = if (reversed) R.drawable.chevron_dotted_up else R.drawable.chevron_filled_up
+    val down = if (reversed) R.drawable.chevron_dotted_down else R.drawable.chevron_filled_down
+    IconButton(onClick = onClick, modifier = Modifier.size(30.dp)) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Icon(painterResource(up), contentDescription = "Swap direction", modifier = Modifier.size(12.dp))
+            Icon(painterResource(down), contentDescription = null, modifier = Modifier.size(12.dp))
         }
     }
 }

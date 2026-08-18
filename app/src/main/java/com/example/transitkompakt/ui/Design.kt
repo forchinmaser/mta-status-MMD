@@ -63,4 +63,12 @@ object Design {
     const val WIDE_CODE_LENGTH = 4
 
     fun isWideCode(code: String) = code.length > WIDE_CODE_LENGTH
+
+    /**
+     * The first-run GTFS gate sheet (GtfsGateSheet) is sized for its tallest
+     * state — Ask, with its two buttons — so switching to Downloading or
+     * Failed never resizes it. Approximate; worth checking against the real
+     * Kompakt screen alongside the other measured constants above.
+     */
+    val GateSheetHeight = 220.dp
 }
